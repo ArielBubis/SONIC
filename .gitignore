@@ -1,0 +1,5 @@
+.venv/
+/__pycache__
+/audio_visualizations
+/music4all/music4all/audios
+/music4all/music4all/lyrics
