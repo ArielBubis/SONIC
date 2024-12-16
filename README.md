@@ -23,9 +23,16 @@ Flexible configuration for audio analysis
 The pipeline creates rich, informative visual representations of audio files:
 
 * Mel Spectrograms: Frequency-based energy distribution
+![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/0355705e-dc46-4b3c-81a0-75282e1d9fea)
+
 * Chromagrams: Harmonic and tonal content
+![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/81882d00-cb0f-4c20-b252-564d5c20a62a)
+
 * FFT Spectra: Frequency amplitude analysis
+![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/9e111706-ea44-41b8-9687-ddc9f5ad25d7)
+
 * Tempograms: Rhythmic pattern visualization
+![00b6fV3nx5z2b8Ls_tempogram](https://github.com/user-attachments/assets/b3580acc-f11d-4f6d-9490-a63a9cf9600a)
 
 ## Purpose
 Transform audio data into machine learning-ready image datasets for:
