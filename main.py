@@ -11,4 +11,4 @@ if __name__ == "__main__":
     fig_size = (488 / dpi, 244 / dpi)  # Adjust based on desired DPI
     
     # Optimize and process audio files
-    generateSpectogram.optimize_audio_visualization(audio_dir, output_dir, fig_size)
+    generateSpectogram.audio_visualization(audio_dir, output_dir, fig_size,max_workers=7)
