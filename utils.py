@@ -1,8 +1,6 @@
-import librosa.display
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from scipy.fft import fft
 
 def save_image_with_cv2(fig, output_filepath):
     """

@@ -60,30 +60,33 @@ def audio_visualization(audio_dir, output_dir, fig_size, max_workers=None, file_
    
     # Find all audio files
     audio_files = [f for f in os.listdir(audio_dir) if f.lower().endswith(file_extension)]
+    batches = list(batchify(audio_files, 3000))
 
     start_time = time.time()
-    logging.info(f"Starting audio visualization for {len(audio_files)} files")
-    logging.info(f"Using {max_workers} workers")
+    for batch_num, batch in enumerate(batches, start=1):
+        print(f"Processing batch {batch_num}/{len(batches)}")
+        logging.info(f"Processing batch {batch_num}/{len(batches)}")
+        logging.info(f"Starting audio visualization for {len(audio_files)} files")
+        logging.info(f"Using {max_workers} workers")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Create tasks for each file
+            tasks = [
+                executor.submit(
+                    process_audio_file,
+                    os.path.join(audio_dir, audio_file),
+                    visualization_dirs,
+                    fig_size
+                )
+                for audio_file in batch
+            ]
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Create tasks for each file
-        tasks = [
-            executor.submit(
-                process_audio_file,
-                os.path.join(audio_dir, audio_file),
-                visualization_dirs,
-                fig_size
-            )
-            for audio_file in audio_files
-        ]
-
-        # Wait for all tasks and log progress
-        for future in tqdm.tqdm(concurrent.futures.as_completed(tasks), total=len(tasks), desc="Processing files"):
-            try:
-                future.result()
-                # logging.info("File processed successfully")
-            except Exception as e:
-                tqdm.error(f"Error in processing file: {e}")
+            # Wait for all tasks and log progress
+            for future in tqdm.tqdm(concurrent.futures.as_completed(tasks), total=len(batch_num), desc="Processing files"):
+                try:
+                    future.result()
+                    # logging.info("File processed successfully")
+                except Exception as e:
+                    tqdm.error(f"Error in processing file: {e}")
 
     # Performance reporting
     end_time = time.time()
@@ -126,9 +129,12 @@ def generate_visualization(audio_dir, output_dir, fig_size, spectrogram_type, **
         kwargs: Additional parameters for specific spectrogram types.
     """
     os.makedirs(output_dir, exist_ok=True)
-
+    output_filepath = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(audio_dir))[0]}.jpeg")
+    if os.path.exists(output_filepath):
+        logging.info(f"File already exists: {output_filepath}")
+        return
     try:
-        y, sr = librosa.load(audio_dir, sr=None, mono=True)
+        y, sr = librosa.load(audio_dir, sr=None, mono=True,duration=30)
     except Exception as e:
         print(f"Error loading {audio_dir}: {e}")
     if y is None or len(y) == 0:
@@ -176,7 +182,6 @@ def generate_visualization(audio_dir, output_dir, fig_size, spectrogram_type, **
     ax.axis('off')
     plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove padding and margins
 
-    output_filepath = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(audio_dir))[0]}.png")
     utils.save_image_with_cv2(fig, output_filepath)
     logging.info(f"Saved {spectrogram_type.capitalize()} spectrogram: {output_filepath}")
 
