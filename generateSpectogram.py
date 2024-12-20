@@ -9,7 +9,7 @@ import psutil
 import logging
 import tqdm
 import utils
-import pandas as pd
+
 open('audio_visualization.log', 'w').close()
 
 logging.basicConfig(
@@ -98,7 +98,7 @@ def process_audio_file(filepath, visualization_dirs, fig_size):
                                     vmin=vis_params['mel_spectrogram']['vmin'],
                                     vmax=vis_params['mel_spectrogram']['vmax'])
         generate_visualization(filepath, visualization_dirs['chromagrams'], fig_size, 'chroma')
-        generate_visualization( filepath, visualization_dirs['tempograms'], fig_size, 'tempogram')    
+        generate_visualization( filepath, visualization_dirs['tempograms'], fig_size, 'tempogram')
     except Exception as e:
         logging.error(f"Error processing file: {filepath} - {e}")
 
