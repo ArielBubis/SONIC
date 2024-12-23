@@ -1,28 +1,5 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import cv2
 from PIL import Image
-import io
-
-# def save_image_with_cv2(fig, output_filepath):
-#     """
-#     saving using direct buffer access and minimal conversions.
-#     """
-#     fig.canvas.draw()
-    
-#     # Get the raw buffer and reshape it efficiently
-#     buffer = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
-#     img_plot = buffer.reshape((fig.canvas.get_width_height()[1], 
-#                              fig.canvas.get_width_height()[0], 
-#                              4))[:, :, :3]
-    
-#     # Direct BGR conversion without intermediate RGB step
-#     img_plot = cv2.cvtColor(img_plot, cv2.COLOR_RGB2BGR)
-    
-#     # Use optimal compression parameters
-#     params = [cv2.IMWRITE_JPEG_QUALITY, 95]  # Adjust quality as needed
-#     cv2.imwrite(output_filepath, img_plot, params)
-#     plt.close(fig)
 
 def save_image_with_pillow(fig, output_filepath):
     """

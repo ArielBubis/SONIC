@@ -3,12 +3,13 @@
 /audio_visualizations
 /music4all/music4all/audios
 /music4all/music4all/lyrics
-audio_visualization.log
 /music4all
 /output_test
 eda.py
 file_analysis.csv
 audio_visualizations.rar
 /audio_visualization_data
-generate_visualization.prof
 test.py
+*.prof
+*.rar
+*.log

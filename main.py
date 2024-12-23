@@ -1,4 +1,4 @@
-import generateSpectogram
+import conversion.convert as convert
 import cProfile
 
 if __name__ == "__main__":
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     fig_size = (488 / dpi, 244 / dpi)  # Adjust based on desired DPI
 
     # Execute main functionality
-    generateSpectogram.audio_visualization(audio_dir, output_dir, fig_size, max_workers=8)
+    convert.audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=8)
 
     profiler.disable()  # Stop profiling
 
