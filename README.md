@@ -1,6 +1,7 @@
 # Music Visualization and Recommendation System
 ## Overview
 A comprehensive audio processing pipeline that transforms music files into visual representations for machine learning-based music recommendation. Part of a Recommender Systems course project, this tool generates multi-dimensional audio visualizations to enable image-based music categorization and analysis.
+python version should be Python 3.12.2
 ## Dataset
 *Dataset Credit*: [Music4All Dataset](https://ieeexplore.ieee.org/document/9145170)
 
@@ -9,7 +10,6 @@ Special thanks to the original dataset creators for providing the music collecti
 
 Multi-threaded audio file processing
 Four advanced audio visualization techniques:
-
 * Mel Spectrograms
 * Chromagrams
 * FFT Spectra
