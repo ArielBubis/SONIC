@@ -31,7 +31,7 @@ if __name__ == "__main__":
     if task == 'download':
         file = args.file
         output = args.output
-        download.download(file, output)
+        download.download_torrent(file, output)
 
     # audio_dir = 'music4all/music4all/test'
     # output_dir = 'output_test'
