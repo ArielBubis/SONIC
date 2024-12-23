@@ -30,6 +30,7 @@ if __name__ == "__main__":
     task = args.task
     if task == 'download':
         file = args.file
+        # check if file is a torrent file or a magnet link
         output = args.output
         download.download_torrent(file, output)
 
