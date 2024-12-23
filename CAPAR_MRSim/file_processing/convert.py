@@ -8,7 +8,7 @@ import time
 import psutil
 import logging
 import tqdm
-import conversion.utils as utils
+import file_processing.utils as utils
 import gc
 from spectograms import generate_spectogram
 

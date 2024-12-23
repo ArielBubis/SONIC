@@ -1,5 +1,7 @@
-import conversion.convert as convert
+import CAPAR_MRSim.file_processing.convert as convert
+import CAPAR_MRSim.file_processing.download as download
 import cProfile
+
 
 if __name__ == "__main__":
     # Profiling setup
