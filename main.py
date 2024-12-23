@@ -1,6 +1,5 @@
 import generateSpectogram
 import cProfile
-import pstats
 
 if __name__ == "__main__":
     # Profiling setup
@@ -8,7 +7,7 @@ if __name__ == "__main__":
     profiler.enable()  # Start profiling
 
     audio_dir = 'music4all/music4all/audios'
-    output_dir = 'audio_visualizations'
+    output_dir = 'audio_visualization_data'
     # audio_dir = 'music4all/music4all/test'
     # output_dir = 'output_test'
 

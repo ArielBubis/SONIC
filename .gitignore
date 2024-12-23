@@ -10,3 +10,5 @@ eda.py
 file_analysis.csv
 audio_visualizations.rar
 /audio_visualization_data
+generate_visualization.prof
+test.py
