@@ -1,4 +1,4 @@
-# Music Visualization and Recommendation System
+# Comparative Analysis of Pretrained Audio Representations in Music Recommender Systems improved (CAPAR-MRSim)
 ## Overview
 A comprehensive audio processing pipeline that transforms music files into visual representations for machine learning-based music recommendation. Part of a Recommender Systems course project, this tool generates multi-dimensional audio visualizations to enable image-based music categorization and analysis.
 python version should be Python 3.12.2
