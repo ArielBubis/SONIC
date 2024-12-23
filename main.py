@@ -1,6 +1,11 @@
+from email.mime import audio
 import CAPAR_MRSim.file_processing.convert as convert
 import CAPAR_MRSim.file_processing.download as download
 import cProfile
+
+import argparse
+
+# Parse command line arguments for task and kwargs
 
 
 if __name__ == "__main__":
@@ -8,17 +13,38 @@ if __name__ == "__main__":
     profiler = cProfile.Profile()
     profiler.enable()  # Start profiling
 
-    audio_dir = 'music4all/music4all/audios'
-    output_dir = 'audio_visualization_data'
+    parser = argparse.ArgumentParser(description='Simple Task Manager for Audio Processing')
+    parser.add_argument('task', type=str, help='Task to perform: download or convert', choices=['download', 'convert'])
+
+    # for convert task
+    parser.add_argument('--audio_dir', type=str, help='Directory containing audio files')
+    parser.add_argument('--output_dir', type=str, help='Directory to save generated spectrograms')
+    parser.add_argument('--fig_size', type=str, help='Size of the figure')
+    parser.add_argument('--max_workers', type=int, help='Number of concurrent workers')
+
+    # for download task
+    parser.add_argument('--file', type=str, help='Path to torrent file')
+    parser.add_argument('--output', type=str, help='Output directory for downloaded files')
+
+    args = parser.parse_args()
+    task = args.task
+    if task == 'download':
+        file = args.file
+        output = args.output
+        download.download(file, output)
+
     # audio_dir = 'music4all/music4all/test'
     # output_dir = 'output_test'
 
     # Convert pixel dimensions to inches
-    dpi = 100
-    fig_size = (488 / dpi, 244 / dpi)  # Adjust based on desired DPI
+    else:
+        audio_dir = args.audio_dir
+        output_dir = args.output_dir
+        dpi = 100
+        fig_size = (488 / dpi, 244 / dpi)  # Adjust based on desired DPI
 
-    # Execute main functionality
-    convert.audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=8)
+        # Execute main functionality
+        convert.audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=8)
 
     profiler.disable()  # Stop profiling
 
