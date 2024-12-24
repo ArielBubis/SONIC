@@ -1,18 +1,13 @@
 import os
-import librosa
-import librosa.display
-import numpy as np
-import matplotlib.pyplot as plt
 import concurrent.futures
 import time
 import psutil
 import logging
 import tqdm
-import file_processing.utils as utils
 import gc
 from spectograms import generate_spectogram
 
-def audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=None, file_extension='.mp3', log_file='audio_visualization.log'):
+def audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=None, file_extension='.mp3'):
     """
     Convert audio files diretory to mel spectrograms, chromagrams, and tempograms.
     Parameters:
@@ -23,18 +18,6 @@ def audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=None, file
         file_extension (str, optional): File extension to process. Defaults to '.mp3'.
         log_file (str, optional): Log file path. Defaults to 'audio_visualization.log'.    
     """
-
-    # Setup logging
-    open(log_file, 'w').close()
-    plt.switch_backend('Agg')
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s: %(message)s',
-        handlers=[
-            logging.FileHandler(log_file),
-        ]
-    )
 
     # Determine optimal number of workers
     if max_workers is None:

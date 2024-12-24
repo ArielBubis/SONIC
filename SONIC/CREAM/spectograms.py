@@ -2,7 +2,7 @@ import librosa
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
-import utils
+import SONIC.CREAM.sonic_utils as utils
 import os
 
 def generate_spectogram(audio_dir, output_dir, fig_size, spectrogram_type):
@@ -24,7 +24,7 @@ def generate_spectogram(audio_dir, output_dir, fig_size, spectrogram_type):
         logging.warning(f"Empty or invalid audio signal for file: {audio_dir}")
         return
     
-    hop_length = utils.calculate_dynamic_hop_length(sr)
+    hop_length = calculate_dynamic_hop_length(sr)
     hop_length = max(hop_length, 128)
 
     try:
@@ -91,10 +91,24 @@ def save_spectrogram(spectrogram, display_func, display_kwargs, output_filepath,
         display_func(spectrogram, ax=ax, **display_kwargs)
         ax.axis('off')
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  # Remove padding and margins
-        utils.save_image_with_pillow(fig, output_filepath)
+        utils.save_image(fig, output_filepath)
         logging.info(f"Saved {spectrogram_type.capitalize()} spectrogram: {output_filepath}")
         # print(f"Saved {spectrogram_type.capitalize()} spectrogram: {output_filepath}")
         plt.close(fig)
         logging.info(f"Spectrogram saved at {output_filepath}")
     except Exception as e:
         logging.error(f"Error saving spectrogram: {e}")
+
+def calculate_dynamic_hop_length(sample_rate, target_time_resolution=0.001):
+    """
+    Calculate a hop length based on the target time resolution.
+    Ensures adequate overlap between FFT windows for smooth spectrograms.
+
+    Parameters:
+        sample_rate (int): Audio sample rate in Hz.
+        target_time_resolution (float): Desired time resolution in seconds.
+
+    Returns:
+        int: Computed hop length.
+    """
+    return max(1, int(target_time_resolution * sample_rate))
