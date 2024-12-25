@@ -13,7 +13,7 @@ if __name__ == "__main__":
     profiler = CREAM.utils.start_profiler()
 
     parser = argparse.ArgumentParser(description='Simple Task Manager for Audio Processing')
-    parser.add_argument('task', type=str, help='Task to perform: download or convert', choices=['convert', 'embedding'])
+    parser.add_argument('task', type=str, help='Task to perform: download or convert', choices=['convert', 'embed'])
 
     # for convert task
     parser.add_argument('--audio-dir', type=str, help='Directory containing audio files')
@@ -22,8 +22,8 @@ if __name__ == "__main__":
 
     # for embedding task
     parser.add_argument('--model-type', type=str, help='Model type')
-    parser.add_argument('--spectrogram-path', type=str, help='Path to the spectrogram')
-    parser.add_argument('--hop-length', type=int, help='Hop length for the audio file')
+    parser.add_argument('--spectrograms-path', type=str, help='Path to the spectrograms')
+    parser.add_argument('--stride', type=int, help='Stride length for extracting windows')
 
     args = parser.parse_args()
     task = args.task
@@ -42,15 +42,16 @@ if __name__ == "__main__":
         CREAM.utils.setup_logging('audio_visualization.log')
         CREAM.convert.audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=8)
 
-    elif task == 'embedding':
+    elif task == 'embed':
         model_name = args.model_type
-        spectoram_path = args.spectrogram_path
-        hop_length = args.hop_length
+        spectrograms_path = args.spectrograms_path
+        stride = args.stride
+        spectrogram_type = spectrograms_path.split('/')[-1]
 
         # Execute main functionality
         CREAM.utils.setup_logging('audio_embedding.log')
-        emb = TAILS.ViT.get_vit_embedding('dino_vits16', spectoram_path, 224)
-        logging.info(f"Embedding shape: {emb.shape}, values: {emb}")
+        emb = TAILS.ViT.get_embeddings(model_name, spectrograms_path, stride)
+        CREAM.utils.save_embeddings(emb, f'{model_name}_{spectrogram_type}_embeddings_{stride}_stride.csv')
 
     
     # Profiling

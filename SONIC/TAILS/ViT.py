@@ -1,14 +1,17 @@
 import logging
+from math import e
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
 import CREAM
-from PIL import Image
 import numpy as np
+import pandas as pd
+from tqdm.auto import tqdm
 
 VALID_ViT = ['dino_vits16', 'dino_vits8', 'dino_vitb16', 'dino_vitb8', 'dino_xcit_small_12_p16', 'dino_xcit_small_12_p8', 'dino_xcit_medium_24_p16', 'dino_xcit_medium_24_p8', 'dino_resnet50']
 
 WINDOW_SIZE = 224
+STRIDE = 112 # 50% overlap (3 samples)
 vit_preproc = transforms.Compose([
     transforms.Normalize(
             mean=[0.485, 0.456, 0.406],  # Normalization mean (ImageNet standard)
@@ -28,70 +31,60 @@ def __get_vit_model(model_name: str):
     model = torch.hub.load('facebookresearch/dino:main', model_name)
     return model
 
-def __load_image(image_path: str):
+def __extract_windows(spectrogram: torch.Tensor, stride: int = STRIDE):
     """
-    Load an image from the given path.
-    Parameters:
-        image_path (str): Path to the image.
-    Returns:
-        torch.Tensor: Image tensor.
+    Extract sliding windows from the spectrogram.
     """
-    image = Image.open(image_path).convert('RGB')
-    image = transforms.ToTensor()(image)
-    logging.info(f"Loaded image from {image_path}, shape: {image.shape}")
-    return image
+    _, _, width = spectrogram.shape
+    windows = [
+        spectrogram[:, :, i:i + WINDOW_SIZE]
+        for i in range(0, width - WINDOW_SIZE + 1, stride)
+    ]
+    return torch.stack(windows)
 
-
-def __get_window_embedding(model: nn.Module, window: torch.Tensor):
+def __get_window_embeddings(model: nn.Module, windows: torch.Tensor, level: int):
     """
-    Get the embedding of a window using a Vision Transformer.
-    Parameters:
-        model (torch.nn.Module): Vision Transformer model.
-        window (torch.Tensor): Window to embed.
-    Returns:
-        torch.Tensor: Window embedding.
+    Get embeddings for a batch of windows using the ViT model.
     """
-    # ViT models require input shape (224, 224, 3, x) where x is the number of windows
-    # assert tuple(window.shape[:3]) == (224, 224, 3), f"Input shape must be (224, 224, 3, x), received {tuple(window.shape)}"
     with torch.no_grad():
-        embedding = model(window)
-    return embedding.cpu().numpy()
+        if level == 0:
+            embeddings = model(windows)
+        else:
+            features = model.get_intermediate_layers(windows, n=1)
+            embeddings = features[0][:,0,:]
+        # embeddings = model(windows)
+    return embeddings.cpu().numpy()
 
-def get_vit_embedding(model: nn.Module, spectogram: torch.Tensor, hop_length: int):
+def __get_vit_embedding(model: nn.Module, spectrogram: torch.Tensor, stride: int, level: int):
     """
-    Get the embedding of a window using a Vision Transformer.
-    Parameters:
-        model (torch.nn.Module): Vision Transformer model.
-        spectogram (torch.Tensor): Spectogram to embed.
-        hop_length (int): Hop length for the audio file.
-    Returns:
-        torch.Tensor: Window embedding.
+    Get embeddings for all windows in a spectrogram.
     """
-    window_embeddings = []
-    for i in range(0, len(spectogram), hop_length):
-        # take a 224x224 window
-        window = spectogram[:, :, i:i + WINDOW_SIZE]
-        window = vit_preproc(window).unsqueeze(0)
-        window_embedding = __get_window_embedding(model, window)
-        window_embeddings.append(window_embedding)
-    return np.mean(window_embeddings, axis=0)
+    windows = __extract_windows(spectrogram, stride)
+    windows = vit_preproc(windows)
+    return np.mean(__get_window_embeddings(model, windows, level), axis=0)
 
-
-def get_embeddings(model_name: str, spectograms_dir: str, hop_length: int):
+def get_embeddings(model_name: str, spectograms_dir: str, stride: int = STRIDE, level: int = 0):
     """
-    Get the embeddings of all windows in a directory of spectrograms.
-    Parameters:
-        model_name (str): Model name.
-        spectograms_dir (str): Path to the directory containing spectrograms.
-        hop_length (int): Hop length for the audio file.
-    Returns:
-        np.ndarray: Embeddings.
+    Get embeddings for all spectrograms in a directory.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = __get_vit_model(model_name).to(device)
-    dataset = CREAM.init_dataset(spectograms_dir)
+    logging.info(f"Using device: {device}")
+    logging.info(f"""
+                 Using model: {model_name}, 
+                 stride: {stride}, 
+                 embedding size: {model.num_features}, 
+                 level: {level}""")
+    dataset = CREAM.utils.init_dataset(spectograms_dir)
     embeddings = []
-    for spectogram in dataset:
-        spectogram = spectogram.to(device)
-        embeddings = get_vit_embedding(model, spectogram, hop_length)
-    return np.array(embeddings)
+
+    for i,batch in tqdm(enumerate(dataset), desc="Extracting embeddings", total=len(dataset)):
+        logging.info(f"Extracting ViT embeddings for batch {i+1}/{len(dataset)}")
+        for spectrogram_path, spectrogram in zip(*batch):
+            logging.info(f"Extracting ViT embedding for {spectrogram_path}")
+            spectrogram = spectrogram.to(device)  # Move spectrogram to device
+            embedding = __get_vit_embedding(model, spectrogram, stride, level)  # Get embedding
+            embeddings.append((spectrogram_path, embedding))  # Append path and embedding
+        
+    
+    return embeddings

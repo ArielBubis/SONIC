@@ -4,37 +4,34 @@ import cProfile
 import logging
 import torch
 from torchvision import transforms
+import pandas as pd
 import os
 
 class SpectrogramDataset(torch.utils.data.Dataset):
     """
-    Dataset class for loading spectrograms.
+    Dataset class for loading spectrograms and ensuring preprocessing.
     """
     def __init__(self, spectograms_dir):
         self.spectograms_dir = spectograms_dir
         self.spectograms = os.listdir(spectograms_dir)
+        self.transforms = transforms.Compose([
+            transforms.Resize((224, 448)),
+            transforms.ToTensor()
+        ])
 
     def __len__(self):
         return len(self.spectograms)
 
     def __getitem__(self, idx):
-        spectogram_path = os.path.join(self.spectograms_dir, self.spectograms[idx])
-        spectogram = Image.open(spectogram_path)
-        spectogram = transforms.ToTensor()(spectogram)
-        return spectogram
+        spectrogram_path = os.path.join(self.spectograms_dir, self.spectograms[idx])
+        spectrogram = Image.open(spectrogram_path).convert("RGB")
+        spectrogram = self.transforms(spectrogram)
+        return spectrogram_path, spectrogram
 
 def init_dataset(spectograms_dir, batch_size=32):
     """
     Initialize the dataset for the given spectrogram directory.
-
-    Parameters:
-        spectograms_dir (str): Path to the directory containing spectrograms.
-        batch_size (int): Batch size for the dataset.
-
-    Returns:
-        torch.utils.data.DataLoader: DataLoader object.
     """
-    # Load the dataset
     dataset = SpectrogramDataset(spectograms_dir)
     data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
     return data_loader
@@ -95,3 +92,16 @@ def stop_profiler(profiler, output_file):
     # Optional: Launch SnakeViz visualization directly
     print("Run the following command to visualize the profiling data with SnakeViz:")
     print("snakeviz profile_data.prof")
+
+def save_embeddings(embeddings, output_file):
+    """
+    Save the embeddings to a CSV file.
+
+    Parameters:
+        embeddings (torch.Tensor): Embeddings to save.
+        output_file (str): Path to save the embeddings.
+    """
+    embeddings = pd.DataFrame(embeddings, columns=['spectrogram', 'embedding'])
+    embeddings = pd.concat([embeddings.drop(columns=['embedding']), embeddings['embedding'].apply(pd.Series)], axis=1)
+    embeddings.to_csv(output_file, index=False)
+    logging.info(f"Embeddings saved to {output_file}")
