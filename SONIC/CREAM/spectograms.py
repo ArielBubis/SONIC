@@ -68,7 +68,7 @@ def generate_chromagram(y, sr, hop_length, output_filepath, fig_size):
     try:
         spectrogram = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop_length)
         display_func = librosa.display.specshow
-        display_kwargs = {'x_axis': 'time', 'y_axis': 'chroma', 'cmap': 'coolwarm'}
+        display_kwargs = {'x_axis': 'time', 'y_axis': 'chroma', 'cmap': 'magma'}
         save_spectrogram(spectrogram, display_func, display_kwargs, output_filepath, fig_size, 'chroma')
         logging.info(f"Saved chromagram to {output_filepath}")
     except Exception as e:
@@ -79,7 +79,7 @@ def generate_tempogram(y, sr, hop_length, output_filepath, fig_size):
         onset_env = librosa.onset.onset_strength(y=y, sr=sr)
         spectrogram = librosa.feature.tempogram(onset_envelope=onset_env, sr=sr, hop_length=hop_length)
         display_func = librosa.display.specshow
-        display_kwargs = {'x_axis': 'time', 'y_axis': 'tempo', 'cmap': 'viridis'}
+        display_kwargs = {'x_axis': 'time', 'y_axis': 'tempo', 'cmap': 'magma'}
         save_spectrogram(spectrogram, display_func, display_kwargs, output_filepath, fig_size, 'tempogram')
         logging.info(f"Saved tempogram to {output_filepath}")
     except Exception as e:
