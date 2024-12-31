@@ -1,4 +1,4 @@
-# SONIC: Spectrogram-Oriented Network for Intelligent Classification
+# SONIC: (S)pectrogram-(O)riented (N)etwork for (I)ntelligent Re(C)ommendation
 ## Overview
 A comprehensive audio processing pipeline that transforms music files into visual representations for machine learning-based music recommendation. Part of a Recommender Systems course project, this tool generates multi-dimensional audio visualizations to enable image-based music categorization and analysis.
 python version should be Python 3.12.2
@@ -11,6 +11,7 @@ Special thanks to the original dataset creators for providing the music collecti
 The SONIC pipeline consists of the following modules:
 - `CREAM` (Conversion, Resources and Enrichment for Audio and Modules): This is a utility module that provides the necessary resources and functions for the SONIC pipeline.
 - `TAILS` (Transformations and Analysis for Intelligent Learning Systems): This module is responsible for embedding the audio spectrograms.
+- `SHADOW` (Systematic Hyperparameter Analysis and Dynamic Optimization Workflow): This module is responsible for the hyperparameter tuning and optimization of the SONIC pipeline.
 
 <!--- more modules to be added here --->
 ## Key Features
@@ -64,8 +65,17 @@ Transform audio data into machine learning-ready image datasets for:
 
 ## Getting Started
 
-1. Install dependencies
-2. Configure input/output directories
-3. Run the audio visualization script
+1. Install the package using pip:
+```bash
+pip install git+https://git@github.com:ArielBubis/sound_visualisation_for_music_recSys.git
+```
+2. Import the package:
+```python
+import sonic
+```
+3. use cli to run the code
+```bash
+sonic --help
+```
 
 Developed as part of a Recommender Systems course project.

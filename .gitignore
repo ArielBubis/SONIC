@@ -1,4 +1,6 @@
 .venv/
+build/
+*.egg-info/
 /**/__pycache__
 /audio_visualizations
 /music4all/music4all/audios

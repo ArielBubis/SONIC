@@ -1,5 +1,3 @@
-import os, sys
-sys.path.insert(0, os.path.abspath(".."))
-sys.path.insert(0, os.path.dirname(__file__))
-
-import ViT as ViT
+from . import mfcc as MFCC
+# from . import vit as ViT
+# from . import musicnn as MusiCNN
