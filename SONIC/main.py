@@ -1,61 +1,92 @@
+from torch import le
 from . import CREAM
 from . import TAILS
 
 import os
-import argparse
+import typer
+from rich.console import Console
+from rich.prompt import Prompt
 
-def main():
+app = typer.Typer()
+console = Console()
 
-    parser = argparse.ArgumentParser(description='Simple Task Manager for Audio Processing')
-    parser.add_argument('task', type=str, help='Tasks to perform: embed', choices=['embed']) # TODO: Add more tasks
-    parser.add_argument('--audio-dir', type=str, help='Directory containing audio files')
-    parser.add_argument('--profile', action='store_true', help='Enable profiling', default=False)
+def validate_args(model_name: str, stride: int | None, level: int | None) -> int | None:
+    """
+    Validate arguments based on the model type.
+    """
+    if "vit" not in model_name.lower() and stride is not None:
+        console.print("[bold yellow]Warning:[/bold yellow] Stride is only applicable to ViT models. Ignoring stride.")
+        stride = None
+    elif "vit" not in model_name.lower() and level is None:
+        console.print("[bold yellow]Warning:[/bold yellow] Level is only applicable to ViT models. Ignoring level.")
+        level = 0
+    return stride, level
 
-    # kwargs for embedding task
-    parser.add_argument('--model-type', type=str, help='Model type')
-    parser.add_argument('--stride', type=int, help='Stride length for extracting windows')
+def run_embed_task(audio_path: str, model_name: str, stride: int | None, level: int = 0):
+    """
+    Execute the embedding task with validated arguments.
+    """
+    if not os.path.exists(audio_path):
+        console.print(f"[bold red]Audio directory {audio_path} does not exist.[/bold red]")
+        raise typer.Exit()
 
-    args = parser.parse_args()
-    task = args.task
-    profiling = args.profile
-    if profiling:
+    stride, level = validate_args(model_name, stride, level)
+
+    CREAM.utils.setup_logging('audio_embedding.log')
+    if "mfcc" in model_name.lower():
+        emb = TAILS.MFCC.get_embeddings(audio_path)
+
+    elif "vit" in model_name.lower():
+        if stride is None:
+            console.print("[bold red]Stride is required for ViT models.[/bold red]")
+            raise typer.Exit()
+        emb = TAILS.ViT.get_embeddings(model_name,audio_path, stride, level)
+
+    elif "musicnn" in model_name.lower():
+        emb = TAILS.MusiCNN.get_embeddings(audio_path)
+
+    else:
+        console.print(f"[bold red]Unsupported model type: {model_name}[/bold red]")
+        raise typer.Exit()
+
+    CREAM.io.save_embeddings(emb, f"{model_name}_embeddings.csv")
+    console.print(f"[green]Embeddings saved to {model_name}_embeddings.csv[/green]")
+
+@app.command()
+def embed(
+    audio_dir: str = typer.Option(..., "--audio-dir", help="Directory containing audio files"),
+    model_type: str = typer.Option(..., "--model-type", help="Model type (e.g., MFCC, ViT, MusicNN)"),
+    stride: int = typer.Option(None, "--stride", help="Stride length for extracting windows (only for ViT)"),
+    level: int = typer.Option(0, "--level", help="Layer level for ViT models"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """
+    Embed audio files using the specified model type.
+    """
+    if profile:
         profiler = CREAM.utils.start_profiler()
 
-    # TODO: remove by the next iteration
-    # if task == 'convert':
-    #     audio_dir = args.audio_dir
-    #     output_dir = args.output_dir
-    #     dpi = 100
-    #     fig_size = (448 / dpi, 224 / dpi)  # Adjust based on desired DPI
+    run_embed_task(audio_dir, model_type, stride)
 
-    #     # Execute main functionality
-    #     CREAM.utils.setup_logging('audio_visualization.log')
-    #     CREAM.convert.audio_to_spectograms(audio_dir, output_dir, fig_size, max_workers=8)
-
-    if task == 'embed':
-        model_name = args.model_type
-        audio_path = args.audio_dir
-        if not os.path.exists(audio_path):
-            print(f"Audio directory {audio_path} does not exist")
-            return
-        stride = args.stride
-
-        # Execute main functionality
-        CREAM.utils.setup_logging('audio_embedding.log')
-        if 'mfcc' in model_name.lower():
-            emb = TAILS.MFCC.get_embeddings(audio_path)
-        
-        # TODO: Implement the following
-        # elif 'vit' in model_name.lower():
-        #     emb = TAILS.ViT.get_embeddings(model_name, audio_path, stride)
-        # elif 'musicnn' in model_name.lower():
-        #     emb = TAILS.MusiCNN.get_embeddings(audio_path)
-
-        CREAM.io.save_embeddings(emb, f'{model_name}_embeddings.csv')
-
-    if profiling:
+    if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
+@app.command()
+def tui():
+    """
+    Launch the interactive TUI for embedding tasks.
+    """
+    console.print("[bold blue]Welcome to the Audio Processing CLI![/bold blue]")
+    task = Prompt.ask("Choose a task", choices=["embed"], default="embed")
 
-if __name__ == '__main__':
-    main()
+    if task == "embed":
+        audio_dir = Prompt.ask("Enter the path to the audio directory")
+        model_type = Prompt.ask("Enter the model type (e.g., MFCC, ViT, MusiCNN)")
+        stride = None
+        if "vit" in model_type.lower():
+            stride = Prompt.ask("Enter the stride length for extracting windows", default="1")
+        
+        run_embed_task(audio_dir, model_type, int(stride) if stride else None)
+
+if __name__ == "__main__":
+    app()

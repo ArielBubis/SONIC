@@ -18,4 +18,4 @@ license = {text = "MIT"}
 
 # Entry point for CLI commands
 [project.scripts]
-sonic = "SONIC.main:main"
+sonic = "SONIC.main:app"
