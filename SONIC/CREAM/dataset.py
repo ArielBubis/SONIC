@@ -27,7 +27,7 @@ class AudioDataset(torch.utils.data.Dataset):
     """
     Dataset class for loading audio data
     """
-    AUDIO_FORMATS = ['.wav', '.mp3', '.flac', '.ogg', 'opus']
+    AUDIO_FORMATS = ['.wav', '.mp3', '.flac', '.ogg', '.opus']
     AUDIO_SR = 16_000 # Audio sample rate in Hz (16 kHz)
     def __init__(self, audio_dir, transform: Callable=None):
         self.audio_dir = audio_dir
