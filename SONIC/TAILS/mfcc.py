@@ -34,7 +34,7 @@ class MFCCEmbedder(embedder.Embedder):
         logging.info("Computing MFCC embeddings")
         logging.info(f"Using device: {self.device}")
         for i, batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
-            logging.info(f"Processing batch {i + 1}/{len(embedder)}")
+            logging.info(f"Processing batch {i + 1}/{len(dataloader)}")
             for audio_path, mfcc in zip(*batch):
                 embeddings.append((audio_path, mfcc.cpu().numpy()))
                 logging.info(f"Computed MFCC embedding for {audio_path}")
