@@ -67,7 +67,7 @@ Transform audio data into machine learning-ready image datasets for:
 
 1. Install the package using pip:
 ```bash
-pip install git+https://git@github.com:ArielBubis/sound_visualisation_for_music_recSys.git
+pip install git+https://github.com/ArielBubis/sound_visualisation_for_music_recSys.git
 ```
 2. Import the package:
 ```python
