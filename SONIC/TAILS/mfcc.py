@@ -26,6 +26,8 @@ class MFCCEmbedder(embedder.Embedder):
         waveform = waveform.to(self.device)
         mfcc_full = self.mfcc(waveform)
         embedding = mfcc_full.mean(dim=-1)
+        if len(embedding.shape) != 1:
+            embedding = embedding
         return embedding
 
     def get_embeddings(self, audio_dir):
@@ -36,7 +38,7 @@ class MFCCEmbedder(embedder.Embedder):
         for i, batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
             logging.info(f"Processing batch {i + 1}/{len(dataloader)}")
             for audio_path, mfcc in zip(*batch):
-                embeddings.append((audio_path, mfcc.cpu().numpy()))
+                embeddings.append((audio_path, mfcc.cpu().numpy().squeeze(0)))
                 logging.info(f"Computed MFCC embedding for {audio_path}")
         
         return embeddings
