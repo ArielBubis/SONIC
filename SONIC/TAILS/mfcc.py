@@ -10,8 +10,8 @@ from SONIC.TAILS import embedder
 N_MFCC = 104  # Number of MFCC coefficients in the original implementation
 
 class MFCCEmbedder(embedder.Embedder):
-    def __init__(self, device, batch_size=32, n_mfcc=N_MFCC):
-        super().__init__(device, batch_size)
+    def __init__(self, batch_size=32, n_mfcc=N_MFCC):
+        super().__init__(batch_size)
         self.mfcc = MFCC(n_mfcc=n_mfcc, melkwargs={'n_fft': 2048, 'hop_length': 512, 'n_mels': 128}).to(self.device)
         logging.info(f"Number of MFCC coefficients: {n_mfcc}")
 
