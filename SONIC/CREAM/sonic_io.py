@@ -12,5 +12,5 @@ def save_embeddings(embeddings, output_file):
     embeddings = pd.DataFrame(embeddings, columns=['track_id', 'embedding'])
     embeddings = pd.concat([embeddings.drop(columns=['embedding']), embeddings['embedding'].apply(pd.Series)], axis=1).set_index('track_id')
     embeddings = embeddings.astype('float16')
-    embeddings.to_parquet(output_file, index=False)
+    embeddings.to_parquet(output_file)
     logging.info(f"Embeddings saved to {output_file}")
