@@ -21,7 +21,8 @@ def waveform_to_image(waveform: torch.tensor, sr: int, n_mels: int = 128, hop_le
         n_mels=n_mels
     )(waveform)
     mel_spectrogram_db = torchaudio.transforms.AmplitudeToDB()(mel_spectrogram).squeeze(0).cpu().numpy()
-    mel_spectrogram_norm = (mel_spectrogram_db - mel_spectrogram_db.min()) / (mel_spectrogram_db.max() - mel_spectrogram_db.min())
+    epsilon = 1e-6
+    mel_spectrogram_norm = (mel_spectrogram_db - mel_spectrogram_db.min() + epsilon) / (mel_spectrogram_db.max() - mel_spectrogram_db.min() + epsilon)
 
     cmap = plt.get_cmap(cmap)
     image = cmap(mel_spectrogram_norm)
