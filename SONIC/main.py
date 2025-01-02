@@ -50,8 +50,8 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
         console.print(f"[bold red]Unsupported model type: {model_name}[/bold red]")
         raise typer.Exit()
 
-    CREAM.io.save_embeddings(emb, f"{model_name}_embeddings.csv")
-    console.print(f"[green]Embeddings saved to {model_name}_embeddings.csv[/green]")
+    CREAM.io.save_embeddings(emb, f"{model_name}_embeddings.parquet")
+    console.print(f"[green]Embeddings saved to {model_name}_embeddings.parquet[/green]")
 
 @app.command()
 def embed(
