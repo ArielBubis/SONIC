@@ -18,9 +18,11 @@ class M2VEmbedder(embedder.Embedder):
             torch.Tensor: M2V embedding.
         """
         waveform = waveform.to(self.device)
+        if waveform.dim() == 1:
+            waveform = waveform.unsqueeze(0)
         with torch.no_grad():
 
-            return self.model(waveform.unsqueeze(0)).last_hidden_state.mean(-2).cpu().squeeze().numpy()
+            return self.model(waveform).last_hidden_state.mean(-2).cpu().squeeze().numpy()
     
     def get_embeddings(self, audio_dir):
         dataloader = dataset.init_dataset(audio_dir, batch_size=self.batch_size, transform=self.embedding_fn)
