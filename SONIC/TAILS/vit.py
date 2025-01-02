@@ -1,6 +1,4 @@
-from functools import partial
 import logging
-import scipy as sp
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
@@ -27,6 +25,7 @@ class ViTEmbedder(embedder.Embedder):
         self.model = self.__get_vit_model(model_name).to(self.device)
         self.stride = stride
         self.level = level
+        logging.info(f"Computing ViT embeddings")
         logging.info(f"Using model: {model_name}, stride: {stride}, embedding size: {self.model.num_features}, level: {level}")
     
     def embedding_fn(self, waveform):
