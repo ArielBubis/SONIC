@@ -90,30 +90,3 @@ class ViTEmbedder(embedder.Embedder):
                 embeddings = features[0][:,0,:]
             # embeddings = model(windows)
         return embeddings.cpu().numpy()
-    
-
-
-
-# def get_embeddings(model_name: str, audio_dir: str, stride: int = STRIDE, level: int = 0):
-    # """
-    # Get embeddings for all spectrograms in a directory.
-    # """
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # vit = __get_vit_model(model_name).to(device)
-    # vit_fn = partial(vit_embedding, model=vit, stride=stride, level=level, device=device)
-    # logging.info(f"Using device: {device}")
-    # logging.info(f"""
-    #              Using model: {model_name}, 
-    #              stride: {stride}, 
-    #              embedding size: {vit.num_features}, 
-    #              level: {level}""")
-    # dataloader = CREAM.dataset.init_dataset(audio_dir, transform=vit_fn)
-    # embeddings = []
-
-    # for i,batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
-    #     logging.info(f"Extracting ViT embeddings for batch {i+1}/{len(dataloader)}")
-    #     for audio_path, embedding in zip(*batch):
-    #         embeddings.append((audio_path, embedding))  # Append path and embedding
-    #         logging.info(f"Extracted ViT embedding for {audio_path}")
-    
-    # return embeddings
