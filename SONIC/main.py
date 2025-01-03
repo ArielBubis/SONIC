@@ -41,6 +41,9 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
     
     elif "mert" in model_name.lower():
         emb = TAILS.MERT.MERTEmbedder(batch_size=batch_size).get_embeddings(audio_path)
+    
+    elif "jukebox" in model_name.lower():
+        emb = TAILS.Jukebox.JukeboxEmbedder(batch_size=batch_size).get_embeddings(audio_path)
 
     elif "vit" in model_name.lower():
         if stride is None:
