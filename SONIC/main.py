@@ -42,6 +42,9 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
             raise typer.Exit()
         emb = TAILS.ViT.ViTEmbedder(batch_size=batch_size, stride=stride, level=level).get_embeddings(audio_path)
 
+    elif "musicfm" in model_name.lower():
+        emb = TAILS.MusicFM.MusicFMEmbedder(batch_size=batch_size).get_embeddings(audio_path)
+
     elif "musicnn" in model_name.lower():
         console.print("[bold red]MusicNN model is not yet supported.[/bold red]")
         raise typer.Exit()
