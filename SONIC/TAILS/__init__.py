@@ -5,4 +5,5 @@ from . import mert as MERT
 from TAILS import embedder as embedder
 from . import encoder as encoder
 from TAILS import musicfm as MusicFM
-# from . import musicnn as MusiCNN
+from TAILS import musicnn as MusiCNN
+from TAILS import emae as EncodecMAE

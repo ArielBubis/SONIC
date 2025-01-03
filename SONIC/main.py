@@ -1,4 +1,5 @@
 from torch import device, le
+import torch
 from . import CREAM
 from . import TAILS
 
@@ -51,9 +52,17 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
     elif "musicfm" in model_name.lower():
         emb = TAILS.MusicFM.MusicFMEmbedder(batch_size=batch_size).get_embeddings(audio_path)
 
-    elif "musicnn" in model_name.lower():
-        console.print("[bold red]MusicNN model is not yet supported.[/bold red]")
-        raise typer.Exit()
+    # elif "musicnn" in model_name.lower():
+    #     emb = TAILS.MusiCNN.MusicNNEmbedder(batch_size=batch_size).get_embeddings(audio_path)
+    #     raise typer.Exit()
+
+    elif "encodecmae" in model_name.lower():
+        num_gpus = torch.cuda.device_count()
+        if num_gpus>0:
+            emb = TAILS.EncodecMAE.EncodecMAEEmbedder(batch_size=batch_size).get_embeddings(audio_path)
+        else:
+            console.print("[bold red] CUDA is required to run this model [/bold red]")
+            raise typer.Exit()
 
     else:
         console.print(f"[bold red]Unsupported model type: {model_name}[/bold red]")
