@@ -2,12 +2,8 @@
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.dynamic]
-dependencies = {file = "requirements.txt"}
-readme = {file = "SONIC/README.md"}  # README is inside the SONIC directory
-
 [tool.setuptools.packages.find]
-include = ["SONIC*","CREAM*", "TAILS*"]
+include = ["SONIC*", "CREAM*", "TAILS*"]
 
 [project]
 name = "sonic"
@@ -15,6 +11,19 @@ version = "0.1.0"
 description = "SONIC: Spectrogram-Oriented Network for Intelligent Recommendation"
 requires-python = ">=3.10,<3.13"
 license = {text = "MIT"}
+
+# Static dependencies
+dependencies = [
+    "opencv-python",
+    "numpy",
+    "torch",
+    "torchaudio",
+    "torchvision",
+    "typer",
+    "pyarrow",
+    "fastparquet",
+    "musicfm @ git+https://github.com/Calibourne/musicfm.git"
+]
 
 # Entry point for CLI commands
 [project.scripts]

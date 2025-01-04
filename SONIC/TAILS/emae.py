@@ -1,10 +1,10 @@
 import logging
 from tqdm.auto import tqdm
-from CREAM import dataset
-from TAILS import embedder
-from encodecmae.encodecmae import load_model
-from encodecmae.encodecmae.hub import get_available_models
+from SONIC.CREAM import dataset
+from SONIC.TAILS import embedder
+from encodecmae import load_model
 import torch
+import warnings
 
 class EncodecMAEEmbedder(embedder.Embedder):
     def __init__(self, batch_size=32):
@@ -16,6 +16,7 @@ class EncodecMAEEmbedder(embedder.Embedder):
             print(f"Error loading EncodecMAE model: {e}")
             raise e
         logging.info("Initialized EncodecMAEEmbedder with EncodecMAE model")
+        warnings.filterwarnings("ignore", category=FutureWarning)
 
     def embedding_fn(self, waveform):
         """
@@ -27,8 +28,9 @@ class EncodecMAEEmbedder(embedder.Embedder):
         """
         waveform_np = waveform.cpu().numpy()
         with torch.no_grad():
-            embeddings = self.model.extract_features_from_waveform(waveform_np)
-        return embeddings
+            embedding = torch.tensor(self.model.extract_features_from_array(waveform_np))
+        embedding = embedding.squeeze(0).mean(dim=0).squeeze()
+        return embedding
 
     def get_embeddings(self, audio_dir):
         """
@@ -47,7 +49,7 @@ class EncodecMAEEmbedder(embedder.Embedder):
         for i, batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
             logging.info(f"Processing batch {i + 1}/{len(dataloader)}")
             for audio_path, embedding in zip(*batch):
-                embeddings.append((audio_path, embedding))
+                embeddings.append((audio_path, embedding.cpu().numpy()))
                 logging.debug(f"Computed EncodecMAE embedding for {audio_path}")
 
         return embeddings
