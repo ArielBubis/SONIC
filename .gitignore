@@ -15,4 +15,5 @@ test.py
 *.prof
 *.rar
 *.log
-SONIC/music4all/music4all
+/SONIC/music4all
+/SONIC/musicfm
