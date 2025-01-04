@@ -1,9 +1,8 @@
 from tqdm.auto import tqdm
 import logging
-from TAILS import embedder
-from CREAM import dataset
+from SONIC.CREAM import dataset
+from SONIC.TAILS import embedder
 from musicfm.model.musicfm_25hz import MusicFM25Hz
-import torch
 import torch.nn as nn
 
 class MusicFMEmbedder(embedder.Embedder):
