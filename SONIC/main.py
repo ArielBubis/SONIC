@@ -111,6 +111,7 @@ def tui():
 @app.command()
 def data_split(
     interactions_file: str = typer.Option(..., "--interactions-file", help="Path to the interactions file"),
+    sep: str = typer.Option(',', "--sep", help="Delimiter used in the interactions file (csv only)"),
     start_date: str = typer.Option(CREAM.split.START_DATE, "--start-date", help="Start date for splitting data"),
     test_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="Test date for splitting data"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),

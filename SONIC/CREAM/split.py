@@ -4,11 +4,12 @@ from sklearn.model_selection import train_test_split
 START_DATE = '2019-02-20'
 TEST_DATE = '2020-02-20'
 
-def split_data(interactions_df_path: str, start_date: str=START_DATE, test_date: str=TEST_DATE) -> None:
+def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DATE, test_date: str=TEST_DATE) -> None:
     """
     Split the interactions data into train, validation, and test sets, based on the given dates.
     Parameters:
         interactions_df_path (str): Path to the interactions data file.
+        sep (str): Delimiter used in the interactions data file (csv only, default: ',').
         start_date (str): Start date for the train set.
         test_date (str): Start date for the test set.
     Returns:
@@ -19,7 +20,7 @@ def split_data(interactions_df_path: str, start_date: str=START_DATE, test_date:
     if interactions_df_path.endswith('.parquet') or interactions_df_path.endswith('.pqt'):
         df = pd.read_parquet(interactions_df_path)
     else:
-        df = pd.read_csv(interactions_df_path)
+        df = pd.read_csv(interactions_df_path, sep=sep)
 
     df = df[df.timestamp >= pd.to_datetime(start_date)]
     a = compress(df)
