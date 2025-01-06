@@ -21,6 +21,7 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
         df = pd.read_parquet(interactions_df_path)
     else:
         df = pd.read_csv(interactions_df_path, sep=sep)
+        df.timestamp = pd.to_datetime(df.timestamp).dt.floor('min')
 
     df = df[df.timestamp >= pd.to_datetime(start_date)]
     a = compress(df)
