@@ -125,7 +125,7 @@ def data_split(
         console.print(f"[bold red]Interactions file {interactions_file} does not exist.[/bold red]")
         raise typer.Exit()
 
-    CREAM.split.split_data(interactions_file, start_date, test_date)
+    CREAM.split.split_data(interactions_file, sep, start_date, test_date)
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
