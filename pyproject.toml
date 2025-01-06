@@ -18,11 +18,9 @@ dependencies = [
     "numpy",
     "torch",
     "torchaudio",
-    "torchvision",
     "typer",
     "pyarrow",
     "fastparquet",
-    "musicfm @ git+https://github.com/Calibourne/musicfm.git"
 ]
 
 # Entry point for CLI commands

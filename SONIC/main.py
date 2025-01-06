@@ -108,5 +108,26 @@ def tui():
         
         run_embed_task(audio_dir, model_type, int(stride) if stride else None)
 
+@app.command()
+def data_split(
+    interactions_file: str = typer.Option(..., "--interactions-file", help="Path to the interactions file"),
+    start_date: str = typer.Option(CREAM.split.START_DATE, "--start-date", help="Start date for splitting data"),
+    test_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="Test date for splitting data"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """
+    Split the interactions data into training and validation sets based on the specified date range.
+    """
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+    if not os.path.exists(interactions_file):
+        console.print(f"[bold red]Interactions file {interactions_file} does not exist.[/bold red]")
+        raise typer.Exit()
+
+    CREAM.split.split_data(interactions_file, start_date, test_date)
+    
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
+
 if __name__ == "__main__":
     app()
