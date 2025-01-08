@@ -1,4 +1,4 @@
-from torch import device, le
+from poplib import CR
 import torch
 from . import CREAM
 from . import TAILS
@@ -23,10 +23,11 @@ def validate_args(model_name: str, stride: int | None, level: int | None) -> int
         level = 0
     return stride, level
 
-def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: int | None = None, level: int = 0):
+def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: int | None = None, level: int = 0, np_precision: str = 'float16'):
     """
     Execute the embedding task with validated arguments.
     """
+    CREAM.utils.setup_logging('audio_embedding.log')
     if not os.path.exists(audio_path):
         console.print(f"[bold red]Audio directory {audio_path} does not exist.[/bold red]")
         raise typer.Exit()
@@ -68,8 +69,9 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
         console.print(f"[bold red]Unsupported model type: {model_name}[/bold red]")
         raise typer.Exit()
 
-    CREAM.io.save_embeddings(emb, f"{model_name}_embeddings.parquet")
-    console.print(f"[green]Embeddings saved to {model_name}_embeddings.parquet[/green]")
+    CREAM.io.save_embeddings(emb, f"embeddings/{model_name}.pqt", kwargs={'np_type': np_precision})
+
+    console.print(f"[green]Embeddings saved to `{os.getcwd()}/embeddings/{model_name}.pqt`[/green]")
 
 @app.command()
 def embed(
@@ -78,6 +80,7 @@ def embed(
     model_type: str = typer.Option(..., "--model-type", help="Model type (e.g., MFCC, ViT, MusicNN)"),
     stride: int = typer.Option(None, "--stride", help="Stride length for extracting windows (only for ViT)"),
     level: int = typer.Option(0, "--level", help="Layer level for ViT models"),
+    np_precision: str = typer.Option('float16', "--np-precision", help="Numpy precision for saving embeddings"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
     """
@@ -86,7 +89,7 @@ def embed(
     if profile:
         profiler = CREAM.utils.start_profiler()
 
-    run_embed_task(audio_dir, model_type, batch_size, stride, level)
+    run_embed_task(audio_dir, model_type, batch_size, stride, level, np_precision)
 
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
@@ -113,7 +116,8 @@ def data_split(
     interactions_file: str = typer.Option(..., "--interactions-file", help="Path to the interactions file"),
     sep: str = typer.Option(',', "--sep", help="Delimiter used in the interactions file (csv only)"),
     start_date: str = typer.Option(CREAM.split.START_DATE, "--start-date", help="Start date for splitting data"),
-    test_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="Test date for splitting data"),
+    end_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="End date for splitting data"),
+    test_date: str = typer.Option(CREAM.split.END_DATE, "--test-date", help="Test date for splitting data"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
     """
@@ -124,8 +128,8 @@ def data_split(
     if not os.path.exists(interactions_file):
         console.print(f"[bold red]Interactions file {interactions_file} does not exist.[/bold red]")
         raise typer.Exit()
-
-    CREAM.split.split_data(interactions_file, sep, start_date, test_date)
+    CREAM.utils.setup_logging('data_split.log')
+    CREAM.split.split_data(interactions_file, sep, start_date, test_date, end_date)
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
