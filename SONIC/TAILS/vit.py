@@ -20,7 +20,7 @@ vit_preproc = T.Compose([
 ])
 
 class ViTEmbedder(embedder.Embedder):
-    def __init__(self, batch_size, model_name='dino_vits16', stride=STRIDE, level=0):
+    def __init__(self, batch_size, model_name, stride=STRIDE, level=0):
         super().__init__(batch_size)
         
         self.model = self.__get_vit_model(model_name).to(self.device)
@@ -72,6 +72,7 @@ class ViTEmbedder(embedder.Embedder):
             torch.nn.Module: ViT model.
         """
         assert model_name in VALID_ViT, f"Invalid model name. Choose from {VALID_ViT}"
+        print(f"Loading model: {model_name}")
         model = torch.hub.load('facebookresearch/dino:main', model_name)
         return model
     

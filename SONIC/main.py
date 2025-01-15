@@ -11,19 +11,7 @@ from rich.prompt import Prompt
 app = typer.Typer()
 console = Console()
 
-def validate_args(model_name: str, stride: int | None, level: int | None) -> int | None:
-    """
-    Validate arguments based on the model type.
-    """
-    if "vit" not in model_name.lower() and stride is not None:
-        console.print("[bold yellow]Warning:[/bold yellow] Stride is only applicable to ViT models. Ignoring stride.")
-        stride = None
-    elif "vit" not in model_name.lower() and level is None:
-        console.print("[bold yellow]Warning:[/bold yellow] Level is only applicable to ViT models. Ignoring level.")
-        level = 0
-    return stride, level
-
-def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: int | None = None, level: int = 0, np_precision: str = 'float16'):
+def run_embed_task(audio_path: str, model_name: str, batch_size: int, np_precision: str):
     """
     Execute the embedding task with validated arguments.
     """
@@ -31,8 +19,6 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
     if not os.path.exists(audio_path):
         console.print(f"[bold red]Audio directory {audio_path} does not exist.[/bold red]")
         raise typer.Exit()
-
-    stride, level = validate_args(model_name, stride, level)
 
     CREAM.utils.setup_logging('audio_embedding.log')
     if "mfcc" in model_name.lower():
@@ -45,13 +31,10 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
         emb = TAILS.MERT.MERTEmbedder(batch_size=batch_size).get_embeddings(audio_path)
 
     elif "vit" in model_name.lower():
-        if stride is None:
-            console.print("[bold red]Stride is required for ViT models.[/bold red]")
-            raise typer.Exit()
-        emb = TAILS.ViT.ViTEmbedder(batch_size=batch_size, stride=stride, level=level).get_embeddings(audio_path)
+        emb = TAILS.ViT.ViTEmbedder(batch_size=batch_size, model_name=model_name).get_embeddings(audio_path)
 
-    elif "musicfm" in model_name.lower():
-        emb = TAILS.MusicFM.MusicFMEmbedder(batch_size=batch_size).get_embeddings(audio_path)
+    # elif "musicfm" in model_name.lower():
+    #     emb = TAILS.MusicFM.MusicFMEmbedder(batch_size=batch_size).get_embeddings(audio_path)
 
     # elif "musicnn" in model_name.lower():
     #     emb = TAILS.MusiCNN.MusicNNEmbedder(batch_size=batch_size).get_embeddings(audio_path)
@@ -77,9 +60,7 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, stride: in
 def embed(
     audio_dir: str = typer.Option(..., "--audio-dir", help="Directory containing audio files"),
     batch_size: int = typer.Option(32, "--batch-size", help="Batch size for processing audio files"),
-    model_type: str = typer.Option(..., "--model-type", help="Model type (e.g., MFCC, ViT, MusicNN)"),
-    stride: int = typer.Option(None, "--stride", help="Stride length for extracting windows (only for ViT)"),
-    level: int = typer.Option(0, "--level", help="Layer level for ViT models"),
+    model_type: str = typer.Option(..., "--model-type", help="Model type (e.g., MFCC, ViT, MERT)"),
     np_precision: str = typer.Option('float16', "--np-precision", help="Numpy precision for saving embeddings"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
@@ -89,7 +70,7 @@ def embed(
     if profile:
         profiler = CREAM.utils.start_profiler()
 
-    run_embed_task(audio_dir, model_type, batch_size, stride, level, np_precision)
+    run_embed_task(audio_dir, model_type, batch_size, np_precision)
 
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
@@ -105,11 +86,8 @@ def tui():
     if task == "embed":
         audio_dir = Prompt.ask("Enter the path to the audio directory")
         model_type = Prompt.ask("Enter the model type (e.g., MFCC, ViT, MusiCNN)")
-        stride = None
-        if "vit" in model_type.lower():
-            stride = Prompt.ask("Enter the stride length for extracting windows", default="1")
         
-        run_embed_task(audio_dir, model_type, int(stride) if stride else None)
+        run_embed_task(audio_dir, model_type)
 
 @app.command()
 def data_split(
