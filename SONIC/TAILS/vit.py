@@ -1,4 +1,5 @@
 import logging
+from pyexpat import model
 import torch
 import torch.nn as nn
 import torchvision.transforms as T
@@ -36,11 +37,19 @@ class ViTEmbedder(embedder.Embedder):
         Returns:
             torch.Tensor: ViT embedding.
         """
-        spectrogram = CREAM.convert.waveform_to_image(waveform, sr=16_000, n_mels=224)
+        spectrogram = CREAM.convert.waveform_to_image(waveform, sr=955, n_mels=224)
+        spectrogram = vit_preproc(spectrogram)
         spectrogram = spectrogram.to(self.device)
-        windows = self.__extract_windows(spectrogram, self.stride)
-        windows = vit_preproc(windows)
-        return np.mean(self.__get_window_embeddings(self.model, windows, self.level), axis=0)
+        self.model.eval()
+        with torch.no_grad():
+            batch_features = self.model.get_intermediate_layers(spectrogram.unsqueeze(0), n=1)  # Extract features
+            cls_features = batch_features[0][:, 0, :]  # CLS token embeddings
+            return cls_features.squeeze().cpu().numpy()
+
+        # spectrogram = spectrogram.to(self.device)
+        # windows = self.__extract_windows(spectrogram, self.stride)
+        # windows = vit_preproc(windows)
+        # return np.mean(self.__get_window_embeddings(self.model, windows, self.level), axis=0)
     
     def get_embeddings(self, audio_dir):
         dataloader = CREAM.dataset.init_dataset(audio_dir, transform=self.embedding_fn, batch_size=self.batch_size)

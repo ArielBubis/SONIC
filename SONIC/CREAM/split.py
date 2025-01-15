@@ -17,7 +17,6 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
     Returns:
         None
     """
-    compress = lambda x: x.groupby(['user_id', 'track_id'], observed=True).agg(timestamp=("timestamp", "min"), count=("timestamp", "count")).reset_index()
     if interactions_df_path.endswith('.parquet') or interactions_df_path.endswith('.pqt'):
         df = pd.read_parquet(interactions_df_path)
     else:
@@ -25,30 +24,28 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
         df.timestamp = pd.to_datetime(df.timestamp).dt.floor('min')
 
     df = df[(df.timestamp >= pd.to_datetime(start_date)) & (df.timestamp < pd.to_datetime(end_date))]
-    first_last = compress(df) # first and last play of each user
 
-    te = first_last[first_last.timestamp >= pd.to_datetime(test_date)] # test set
+    te = df[df.timestamp >= pd.to_datetime(test_date)].reset_index(drop=True) # test set
 
     # This is done so that the number of plays in train doesn't account for plays that happened after `test_date`
-    df = df[df.timestamp < pd.to_datetime(test_date)]
-    tr = compress(df) # train set
+    tr = df[df.timestamp < pd.to_datetime(test_date)].reset_index(drop=True) # train set
 
     te = te[te.user_id.isin(tr.user_id.unique())]
     te = te[te.track_id.isin(tr.track_id.unique())]
 
 
     validation_user_ids, test_user_ids = train_test_split(te.user_id.unique(), test_size=0.5, random_state=42)
-    val = te[te.user_id.isin(validation_user_ids)]
-    test = te[te.user_id.isin(test_user_ids)]
+    val = te[te.user_id.isin(validation_user_ids)].reset_index(drop=True)
+    test = te[te.user_id.isin(test_user_ids)].reset_index(drop=True)
 
     logging.info(f"Interactions data loaded from {interactions_df_path}")
     logging.info(f"Data split based on the following dates:")
     logging.info(f"Start date: {start_date}")
     logging.info(f"End date: {end_date}")
     logging.info(f"Test date: {test_date}")
-    logging.info(f"Train set size: {{{len(tr):,} interactions, {len(tr.user_id.unique()):,} users}}")
-    logging.info(f"Validation set size: {{{len(val):,} interactions, {len(val.user_id.unique()):,} users}}")
-    logging.info(f"Test set size: {{{len(test):,} interactions, {len(test.user_id.unique()):,} users}}")
+    logging.info(f"Train set size: {{{len(tr):,} interactions, {len(tr.user_id.unique()):,} users, {len(tr.track_id.unique()):,} tracks}}")
+    logging.info(f"Validation set size: {{{len(val):,} interactions, {len(val.user_id.unique()):,} users, {len(val.track_id.unique()):,} tracks}}")
+    logging.info(f"Test set size: {{{len(test):,} interactions, {len(test.user_id.unique()):,} users, {len(test.track_id.unique()):,} tracks}}")
 
     out_dir = interactions_df_path.rsplit('/', 1)[0]
 
