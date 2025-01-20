@@ -21,6 +21,8 @@ dependencies = [
     "typer",
     "pyarrow",
     "fastparquet",
+    "faiss-cpu",
+    "rs_metrics",
 ]
 
 # Entry point for CLI commands

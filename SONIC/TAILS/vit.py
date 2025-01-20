@@ -1,3 +1,4 @@
+from email.mime import audio
 import logging
 from pyexpat import model
 import torch
@@ -24,8 +25,6 @@ class ViTEmbedder(embedder.Embedder):
         super().__init__(batch_size)
         
         self.model = self.__get_vit_model(model_name).to(self.device)
-        self.stride = stride
-        self.level = level
         logging.info(f"Computing ViT embeddings")
         logging.info(f"Using model: {model_name}, stride: {stride}, embedding size: {self.model.num_features}, level: {level}")
     
@@ -40,27 +39,36 @@ class ViTEmbedder(embedder.Embedder):
         spectrogram = CREAM.convert.waveform_to_image(waveform, sr=955, n_mels=224)
         spectrogram = vit_preproc(spectrogram)
         spectrogram = spectrogram.to(self.device)
-        self.model.eval()
-        with torch.no_grad():
-            batch_features = self.model.get_intermediate_layers(spectrogram.unsqueeze(0), n=1)  # Extract features
-            cls_features = batch_features[0][:, 0, :]  # CLS token embeddings
-            return cls_features.squeeze().cpu().numpy()
 
-        # spectrogram = spectrogram.to(self.device)
-        # windows = self.__extract_windows(spectrogram, self.stride)
-        # windows = vit_preproc(windows)
-        # return np.mean(self.__get_window_embeddings(self.model, windows, self.level), axis=0)
+        return spectrogram
+        # self.model.eval()
+        # with torch.no_grad():
+        #     features = self.model(spectrogram.unsqueeze(0))
+        # return features.squeeze().cpu().numpy()
     
+    def embedding_fn_batch(self, batch):
+        """
+        Compute ViT embeddings for the given batch of waveforms.
+        Parameters:
+            batch (list): List of waveforms.
+        Returns:
+            torch.Tensor: ViT embeddings.
+        """
+        file_paths, waveforms = zip(*batch)
+        with torch.no_grad:
+            features = self.model(waveforms)
+        return file_paths, features.cpu().numpy()
+
     def get_embeddings(self, audio_dir):
         dataloader = CREAM.dataset.init_dataset(audio_dir, transform=self.embedding_fn, batch_size=self.batch_size)
         embeddings = []
 
         for i,batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
             logging.info(f"Extracting ViT embeddings for batch {i+1}/{len(dataloader)}")
-            for audio_path, embedding in zip(*batch):
-                embeddings.append((audio_path, embedding))  # Append path and embedding
+            audio_paths, features = self.embedding_fn_batch(batch)
+            for audio_path, embedding in zip(audio_paths, features):
+                embeddings.append((audio_path, embedding))
                 logging.info(f"Extracted ViT embedding for {audio_path}")
-        
         return embeddings
     
     def __get_vit_model(self, model_name: str):

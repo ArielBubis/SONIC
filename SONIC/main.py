@@ -1,12 +1,17 @@
 from poplib import CR
+from click import Option
 import torch
 from . import CREAM
 from . import TAILS
+from . import ROUGE
 
 import os
 import typer
 from rich.console import Console
 from rich.prompt import Prompt
+import pandas as pd
+from typing import Optional, List
+from typing_extensions import Annotated
 
 app = typer.Typer()
 console = Console()
@@ -111,6 +116,32 @@ def data_split(
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
+
+@app.command()
+def run_model(
+    model_name: str = typer.Option(..., "--model-name", help="Name of the model to run"),
+    embedding: Optional[List[str]] = typer.Option(['mfcc_104'], "--embedding", help="Name of the embedding model"),
+    mode: str = typer.Option('val', "--mode", help="Mode for running the model (val or test)"),
+    suffix: str = typer.Option('cosine', "--suffix", help="Suffix for the model name"),
+    k: Optional[List[int]] = typer.Option([50], "--k", help="List of k nearest neighbors to retrieve"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """
+    Run the specified model on the provided training, validation, and test data.
+    """
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+    if not os.path.exists('data/train.pqt') or not os.path.exists('data/validation.pqt') or not os.path.exists('data/test.pqt'):
+        console.print(f"[bold red]One or more data files do not exist.[/bold red]")
+        raise typer.Exit()
+    CREAM.utils.setup_logging('model_run.log')
+    if model_name == 'knn':
+        ROUGE.knn.knn(embedding, suffix, k, mode)
+    
+    
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
+
 
 if __name__ == "__main__":
     app()
