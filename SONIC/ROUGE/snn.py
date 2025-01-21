@@ -155,17 +155,31 @@ def prepare_data(train, val, test, mode='val'):
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
 
-def snn(model_name, train, val, test, mode='val', emb_dim_out=300):
-    train, val, user_history, ie = prepare_data(train, val, test, mode)
-    item_embs = load_embeddings(model_name, train, ie)
+def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
+    train = pd.read_parquet('data/train.pqt')
+    val = pd.read_parquet('data/validation.pqt')
+    test = pd.read_parquet('data/test.pqt')
+    
+    if isinstance(model_names, str):
+        model_names = [model_names]
+    
+    all_user_embs = []
+    all_item_embs = []
+    
+    for model_name in model_names:
+        train, val, user_history, ie = prepare_data(train, val, test, mode)
+        item_embs = load_embeddings(model_name, train, ie)
 
-    num_users = train['user_id'].nunique()
-    num_items = train['item_id'].nunique()
-    emb_dim_in = item_embs.shape[1]
+        num_users = train['user_id'].nunique()
+        num_items = train['item_id'].nunique()
+        emb_dim_in = item_embs.shape[1]
 
-    model = ShallowEmbeddingModel(num_users, num_items, emb_dim_in, precomputed_item_embeddings=item_embs, emb_dim_out=emb_dim_out)
-    user_embs, item_embs = model.extract_embeddings()
+        model = ShallowEmbeddingModel(num_users, num_items, emb_dim_in, precomputed_item_embeddings=item_embs, emb_dim_out=emb_dim_out)
+        user_embs, item_embs = model.extract_embeddings()
+
+        all_user_embs.append(user_embs)
+        all_item_embs.append(item_embs)
 
     # Further processing and evaluation can be done here
 
-    return user_embs, item_embs
+    return all_user_embs, all_item_embs
