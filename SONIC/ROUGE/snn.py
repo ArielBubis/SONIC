@@ -62,63 +62,6 @@ class ShallowEmbeddingModel(nn.Module):
 
         return user_embeddings, item_embeddings
 
-class ShallowInteractionModel(nn.Module):
-    def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, precomputed_user_embeddings=None, emb_dim_out=300):
-        super(ShallowInteractionModel, self).__init__()
-        self.emb_dim_in = emb_dim_in
-
-        if precomputed_user_embeddings is None:
-            self.user_embeddings = nn.Embedding(num_users, self.emb_dim_in)
-        else:
-            precomputed_user_embeddings = torch.from_numpy(precomputed_user_embeddings)
-            assert precomputed_user_embeddings.size(1) == emb_dim_in
-            self.user_embeddings = nn.Embedding.from_pretrained(precomputed_user_embeddings)
-
-        if precomputed_item_embeddings is None:
-            self.item_embeddings = nn.Embedding(num_items, self.emb_dim_in)
-        else:
-            precomputed_item_embeddings = torch.from_numpy(precomputed_item_embeddings)
-            assert precomputed_item_embeddings.size(1) == emb_dim_in
-            self.item_embeddings = nn.Embedding.from_pretrained(precomputed_item_embeddings)
-
-        self.model = nn.Sequential(
-            nn.Linear(self.emb_dim_in, emb_dim_out),
-            nn.ReLU()
-        )
-
-        self.fc = nn.Linear(emb_dim_out, 1)
-
-    def freeze_item_embs(self, flag):
-        self.item_embeddings.weight.requires_grad = flag
-
-    def freeze_user_embs(self, flag):
-        self.user_embeddings.weight.requires_grad = flag
-
-    def forward(self, user_indices, item_indices):
-        user_embeds = self.user_embeddings(user_indices)
-        item_embeds = self.item_embeddings(item_indices)
-
-        user_embeds = self.model(user_embeds)
-        item_embeds = self.model(item_embeds)
-
-        hadamard_product = user_embeds * item_embeds
-        scores = self.fc(hadamard_product)
-
-        return torch.sigmoid(scores).squeeze()
-
-    def extract_embeddings(self):
-        user_embeddings = self.user_embeddings.weight.data
-        item_embeddings = self.item_embeddings.weight.data
-
-        with torch.no_grad():
-            user_embeddings = self.model(user_embeddings).cpu().numpy()
-            item_embeddings = self.model(item_embeddings).cpu().numpy()
-
-        user_embeddings = user_embeddings / np.linalg.norm(user_embeddings, axis=1, keepdims=True)
-        item_embeddings = item_embeddings / np.linalg.norm(item_embeddings, axis=1, keepdims=True)
-
-        return user_embeddings, item_embeddings
-
 def load_embeddings(model_name, train, ie):
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
@@ -155,31 +98,45 @@ def prepare_data(train, val, test, mode='val'):
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
 
+def calc_snn(model_name, train, val, test, mode='val', emb_dim_out=300):
+    run_name = f'{model_name}_snn'
+    train, val, user_history, ie = prepare_data(train, val, test, mode)
+    item_embs = load_embeddings(model_name, train, ie)
+
+    num_users = train['user_id'].nunique()
+    num_items = train['item_id'].nunique()
+    emb_dim_in = item_embs.shape[1]
+
+    model = ShallowEmbeddingModel(num_users, num_items, emb_dim_in, precomputed_item_embeddings=item_embs, emb_dim_out=emb_dim_out)
+    user_embs, item_embs = model.extract_embeddings()
+
+    all_users = val.user_id.unique()
+
+    user_recommendations = {}
+    for user_id in tqdm(all_users, desc=f'applying snn for {model_name}'):
+        history = user_history[user_id]
+        user_vector = user_embs[user_id]
+        scores = np.dot(item_embs, user_vector)
+        recommendations = np.argsort(scores)[::-1]
+        recommendations = [idx for idx in recommendations if idx not in history][:50]
+        user_recommendations[user_id] = recommendations
+
+    df = dict_to_pandas(user_recommendations)
+
+    os.makedirs('metrics', exist_ok=True)
+    metrics_val = calc_metrics(val, df, 50)
+    metrics_val = metrics_val.apply(mean_confidence_interval)
+
+    metrics_val.to_csv(f'metrics/{run_name}_val.csv')
+
+    return metrics_val
+
 def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
     
     if isinstance(model_names, str):
-        model_names = [model_names]
-    
-    all_user_embs = []
-    all_item_embs = []
-    
-    for model_name in model_names:
-        train, val, user_history, ie = prepare_data(train, val, test, mode)
-        item_embs = load_embeddings(model_name, train, ie)
-
-        num_users = train['user_id'].nunique()
-        num_items = train['item_id'].nunique()
-        emb_dim_in = item_embs.shape[1]
-
-        model = ShallowEmbeddingModel(num_users, num_items, emb_dim_in, precomputed_item_embeddings=item_embs, emb_dim_out=emb_dim_out)
-        user_embs, item_embs = model.extract_embeddings()
-
-        all_user_embs.append(user_embs)
-        all_item_embs.append(item_embs)
-
-    # Further processing and evaluation can be done here
-
-    return all_user_embs, all_item_embs
+        return calc_snn(model_names, train, val, test, mode, emb_dim_out)
+    else:
+        return pd.concat([calc_snn(model_name, train, val, test, mode, emb_dim_out) for model_name in model_names])
