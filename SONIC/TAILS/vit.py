@@ -40,24 +40,10 @@ class ViTEmbedder(embedder.Embedder):
         spectrogram = vit_preproc(spectrogram)
         spectrogram = spectrogram.to(self.device)
 
-        return spectrogram
-        # self.model.eval()
-        # with torch.no_grad():
-        #     features = self.model(spectrogram.unsqueeze(0))
-        # return features.squeeze().cpu().numpy()
-    
-    def embedding_fn_batch(self, batch):
-        """
-        Compute ViT embeddings for the given batch of waveforms.
-        Parameters:
-            batch (list): List of waveforms.
-        Returns:
-            torch.Tensor: ViT embeddings.
-        """
-        file_paths, waveforms = zip(*batch)
-        with torch.no_grad:
-            features = self.model(waveforms)
-        return file_paths, features.cpu().numpy()
+        self.model.eval()
+        with torch.no_grad():
+            features = self.model(spectrogram.unsqueeze(0))
+        return features.squeeze().cpu().numpy()
 
     def get_embeddings(self, audio_dir):
         dataloader = CREAM.dataset.init_dataset(audio_dir, transform=self.embedding_fn, batch_size=self.batch_size)
@@ -65,8 +51,7 @@ class ViTEmbedder(embedder.Embedder):
 
         for i,batch in tqdm(enumerate(dataloader), desc="Extracting embeddings", total=len(dataloader)):
             logging.info(f"Extracting ViT embeddings for batch {i+1}/{len(dataloader)}")
-            audio_paths, features = self.embedding_fn_batch(batch)
-            for audio_path, embedding in zip(audio_paths, features):
+            for audio_path, embedding in zip(*batch):
                 embeddings.append((audio_path, embedding))
                 logging.info(f"Extracted ViT embedding for {audio_path}")
         return embeddings
