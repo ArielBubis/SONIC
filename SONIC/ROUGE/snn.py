@@ -137,9 +137,21 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
         metrics_val = calc_metrics(val, df, current_k)
         metrics_val = metrics_val.apply(mean_confidence_interval)
         all_metrics_val.append(metrics_val)
+        if len(k) > 1:
+            metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+            metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
+
+            all_metrics_val.append(metrics_val_concat)
 
     metrics_val_concat = pd.concat(all_metrics_val, axis=0)
     os.makedirs('metrics', exist_ok=True)
+            # Adjust column names and indices if multiple k values
+
+    if len(k) > 1:
+        metrics_val_concat = pd.concat(all_metrics_val, axis=0)
+    else:
+        metrics_val_concat = all_metrics_val[0]
+
     metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
 
     return metrics_val_concat
