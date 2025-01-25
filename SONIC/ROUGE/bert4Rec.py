@@ -10,7 +10,7 @@ from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 
-class BERT4Rec_Sys(nn.Module):
+class BERT4Rec(nn.Module):
     def __init__(self, vocab_size, bert_config, precomputed_item_embeddings=None, add_head=True,
                  tie_weights=True, padding_idx=-1, init_std=0.02):
         super().__init__()
