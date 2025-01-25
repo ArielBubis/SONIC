@@ -2,7 +2,8 @@ import os
 import numpy as np
 import torch
 from torch import nn
-from transformers import BertConfig, BertModel
+from torch.utils.data import DataLoader, Dataset
+from transformers import BertConfig, BertModel, AdamW
 from tqdm.auto import tqdm
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
@@ -61,6 +62,22 @@ class BERT4Rec(nn.Module):
         return outputs
 
 
+class SequenceDataset(Dataset):
+    def __init__(self, data, max_seq_length=50):
+        self.data = data
+        self.max_seq_length = max_seq_length
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        sequence = self.data.iloc[idx]['sequence']
+        sequence = sequence[-self.max_seq_length:]  # Truncate to max_seq_length
+        input_ids = torch.tensor(sequence, dtype=torch.long)
+        attention_mask = torch.ones_like(input_ids)
+        return input_ids, attention_mask
+
+
 def prepare_data(train, val, test, mode='val'):
     if mode == 'test':
         train = pd.concat([train, val], ignore_index=True).reset_index(drop=True)
@@ -77,39 +94,96 @@ def prepare_data(train, val, test, mode='val'):
     val['user_id'] = ue.transform(val['user_id'])
     val['item_id'] = ie.transform(val['track_id'])
 
+    # Group interactions into sequences
+    train['sequence'] = train.groupby('user_id')['item_id'].apply(lambda x: list(x))
+    val['sequence'] = val.groupby('user_id')['item_id'].apply(lambda x: list(x))
+
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
 
 
-def run_bert4rec(train, val, test, mode='val', k=50):
+def train_bert4rec(model, train_loader, val_loader, optimizer, criterion, device, epochs=5):
+    model.to(device)
+    model.train()
+
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
+        total_loss = 0
+
+        # Training loop
+        for batch in tqdm(train_loader, desc="Training"):
+            input_ids, attention_mask = batch
+            input_ids = input_ids.to(device)
+            attention_mask = attention_mask.to(device)
+
+            optimizer.zero_grad()
+            outputs = model(input_ids, attention_mask)
+            loss = criterion(outputs.view(-1, model.vocab_size), input_ids.view(-1))
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+
+        print(f"Training Loss: {total_loss / len(train_loader)}")
+
+        # Validation loop
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch in tqdm(val_loader, desc="Validation"):
+                input_ids, attention_mask = batch
+                input_ids = input_ids.to(device)
+                attention_mask = attention_mask.to(device)
+
+                outputs = model(input_ids, attention_mask)
+                loss = criterion(outputs.view(-1, model.vocab_size), input_ids.view(-1))
+                val_loss += loss.item()
+
+        print(f"Validation Loss: {val_loss / len(val_loader)}")
+        model.train()
+
+
+def run_bert4rec(train, val, test, mode='val', k=50, epochs=5):
     train, val, user_history, ie = prepare_data(train, val, test, mode)
 
     # Initialize BERT4Rec model
     bert_config = {
-        'hidden_size': 768,
-        'num_hidden_layers': 6,
-        'num_attention_heads': 8,
-        'intermediate_size': 3072,
+        'hidden_size': 64,
+        'num_hidden_layers': 2,
+        'num_attention_heads': 2,
+        'intermediate_size': 256,
         'hidden_act': 'gelu',
         'hidden_dropout_prob': 0.1,
         'attention_probs_dropout_prob': 0.1,
-        'max_position_embeddings': 512,
+        'max_position_embeddings': 200,
         'type_vocab_size': 2,
         'initializer_range': 0.02
     }
     model = BERT4Rec(vocab_size=len(ie.classes_), bert_config=bert_config)
 
-    # Train the model (placeholder for training logic)
-    # TODO: Implement training loop
+    # Prepare data loaders
+    train_dataset = SequenceDataset(train)
+    val_dataset = SequenceDataset(val)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+    # Set up optimizer and loss function
+    optimizer = AdamW(model.parameters(), lr=1e-4)
+    criterion = nn.CrossEntropyLoss(ignore_index=-1)  # Ignore padding index
+
+    # Train the model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    train_bert4rec(model, train_loader, val_loader, optimizer, criterion, device, epochs=epochs)
 
     # Generate recommendations
+    model.eval()
     user_recommendations = {}
     for user_id in tqdm(val.user_id.unique(), desc="Generating recommendations"):
         history = user_history[user_id]
-        input_ids = torch.tensor(list(history), dtype=torch.long).unsqueeze(0)
-        attention_mask = torch.ones_like(input_ids)
+        input_ids = torch.tensor(list(history), dtype=torch.long).unsqueeze(0).to(device)
+        attention_mask = torch.ones_like(input_ids).to(device)
         outputs = model(input_ids, attention_mask)
-        scores = outputs.squeeze().detach().numpy()
+        scores = outputs.squeeze().detach().cpu().numpy()
         recommendations = np.argsort(-scores)[:k]
         user_recommendations[user_id] = recommendations
 
@@ -125,8 +199,8 @@ def run_bert4rec(train, val, test, mode='val', k=50):
     return metrics
 
 
-def bert4rec(model_names, suffix, k, mode='val'):
+def bert4rec(model_names, suffix, k, mode='val', epochs=5):
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
-    return run_bert4rec(train, val, test, mode, k)
+    return run_bert4rec(train, val, test, mode, k, epochs)
