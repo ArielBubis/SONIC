@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.nn import CrossEntropyLoss
 from rs_metrics import hitrate, mrr, precision, recall, ndcg
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval
-from bert4rec import BERT4Rec
+from .bert4rec import BERT4Rec
 from SONIC.CREAM.dataset import InteractionDataset
 
 def train_bert(model, train_loader, val_loader, optimizer, criterion, device, num_epochs, checkpoint_dir):
