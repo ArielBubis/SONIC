@@ -140,9 +140,7 @@ def run_model(
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
     elif model_name == 'bert4rec':
-        bert4rec_module = ROUGE.bert4rec()
-        bert4rec_module.bert4rec(embedding, suffix, k, mode)
-    
+        ROUGE.bert4rec.bert4rec(embedding, suffix, k, mode)
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 

@@ -204,5 +204,3 @@ def bert4rec(model_names, suffix, k, mode='val', epochs=5):
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
     return run_bert4rec(train, val, test, mode, k, epochs)
-
-__all__ = ['bert4rec']
