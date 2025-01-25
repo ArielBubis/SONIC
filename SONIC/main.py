@@ -154,8 +154,7 @@ def train_bert(
     """
     Train the BERT4Rec model.
     """
-    from SONIC.ROUGE.bert_train import main
-    main()
-    
+    ROUGE.bert_train.main()
+
 if __name__ == "__main__":
     app()
