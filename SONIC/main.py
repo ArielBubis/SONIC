@@ -140,10 +140,22 @@ def run_model(
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
     elif model_name == 'bert4rec':
-        ROUGE.bert4rec.bert4rec(embedding, suffix, k, mode)
+        from .ROUGE import bert4rec  # Import here to avoid circular import
+        bert4rec.bert4rec(embedding, suffix, k, mode)
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
-
+@app.command()
+def train_bert(
+    model_name: str = typer.Option(..., "--model-name", help="Name of the BERT4Rec model"),
+    batch_size: int = typer.Option(32, "--batch-size", help="Batch size for training"),
+    num_epochs: int = typer.Option(10, "--num-epochs", help="Number of training epochs"),
+):
+    """
+    Train the BERT4Rec model.
+    """
+    from SONIC.ROUGE.bert_train import main
+    main()
+    
 if __name__ == "__main__":
     app()
