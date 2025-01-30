@@ -10,8 +10,8 @@ Special thanks to the original dataset creators for providing the music collecti
 ## Module Architecture
 The SONIC pipeline consists of the following modules:
 - `CREAM` (Conversion, Resources and Enrichment for Audio and Modules): This is a utility module that provides the necessary resources and functions for the SONIC pipeline.
-- `TAILS` (Transformations and Analysis for Intelligent Learning Systems): This module is responsible for embedding the audio spectrograms.
-- `SHADOW` (Systematic Hyperparameter Analysis and Dynamic Optimization Workflow): This module is responsible for the hyperparameter tuning and optimization of the SONIC pipeline.
+- `TAILS` (Transformations and Analysis for Intelligent Learning Systems): This module is responsible for the embedding pipelines.
+- `ROUGE` (Recommendation Optimization and User Guidance Engine): This module is responsible for the recommendation engine.
 
 <!--- more modules to be added here --->
 ## Key Features

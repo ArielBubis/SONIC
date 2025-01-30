@@ -9,9 +9,7 @@ import os
 import typer
 from rich.console import Console
 from rich.prompt import Prompt
-import pandas as pd
 from typing import Optional, List
-from typing_extensions import Annotated
 
 app = typer.Typer()
 console = Console()
@@ -37,6 +35,9 @@ def run_embed_task(audio_path: str, model_name: str, batch_size: int, np_precisi
 
     elif "vit" in model_name.lower():
         emb = TAILS.ViT.ViTEmbedder(batch_size=batch_size, model_name=model_name).get_embeddings(audio_path)
+
+    elif "lyrical" in model_name.lower():
+        emb = TAILS.Lyrical.LyricalEmbedder().get_embeddings(audio_path)
 
     # elif "musicfm" in model_name.lower():
     #     emb = TAILS.MusicFM.MusicFMEmbedder(batch_size=batch_size).get_embeddings(audio_path)

@@ -6,3 +6,4 @@ from . import emae as EncodecMAE
 from . import m2v as M2V
 from . import mert as MERT
 from . import vit as ViT
+from . import lyrical as Lyrical
