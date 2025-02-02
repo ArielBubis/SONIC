@@ -138,7 +138,8 @@ def run_model(
     CREAM.utils.setup_logging('model_run.log')
     if model_name == 'knn':
         ROUGE.knn.knn(embedding, suffix, k, mode)
-    
+    elif model_name == 'snn':
+        ROUGE.snn.snn(embedding, suffix, k, mode)
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
