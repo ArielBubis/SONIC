@@ -6,7 +6,7 @@ import faiss
 from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
-def prepare_data(train, val, test, mode='val'):
+def prepare_data(train, val, test, mode):
     
     if mode == 'test':
         train = pd.concat([train, val], ignore_index=True).reset_index(drop=True)
@@ -27,8 +27,8 @@ def prepare_data(train, val, test, mode='val'):
     return train, val, user_history, ie
 
 
-def prepare_index(train, model_name, suffix, ie):
-    tqdm.pandas(desc=f'computing user embeddings for {model_name}')
+def prepare_index(train, model_name, suffix, ie, use_lyrics):
+    tqdm.pandas(desc=f'computing user embeddings for {model_name}{"" if not use_lyrics else "+lyrics"}_{suffix}')
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
         emb_size = int(emb_size) if emb_size is not None else 104
@@ -40,6 +40,12 @@ def prepare_index(train, model_name, suffix, ie):
     item_embs['track_id'] = item_embs['track_id'].apply(lambda x: x.split('.')[0])
     item_embs = item_embs[item_embs.track_id.isin(train.track_id.unique())].reset_index(drop=True)
     item_embs.index = ie.transform(item_embs.track_id).astype('int')
+
+    if use_lyrics:
+        lyrics_embs = pd.read_parquet('embeddings/lyrical.pqt').astype('float32').reset_index()
+        lyrics_embs['item_id'] = lyrics_embs['track_id'].apply(lambda x: x.split('/')[-1].split('.')[0])
+        item_embs = item_embs.merge(lyrics_embs, on='track_id', how='left')
+
     item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
     item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
     user_embs = np.stack(train.groupby('user_id')['item_id'].progress_apply(lambda items: item_embs[items].mean(axis=0)).values)
@@ -54,11 +60,11 @@ def prepare_index(train, model_name, suffix, ie):
 
     return user_embs, index
 
-def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|list=50):
-    run_name = f'{model_name}_{suffix}'
+def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|list=50, use_lyrics=False):
+    run_name = f'{model_name}{'' if not use_lyrics else "+lyrics"}_{suffix}'
     train, val, user_history, ie = prepare_data(train, val, test, mode)
 
-    user_embs, index = prepare_index(train, model_name, suffix, ie)
+    user_embs, index = prepare_index(train, model_name, suffix, ie, use_lyrics)
 
     all_users = val.user_id.unique()
 
@@ -69,7 +75,7 @@ def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|li
 
     for current_k in k:
         user_recommendations = {}
-        for user_id in tqdm(all_users, desc=f'applying knn for {model_name} with k={current_k}'):
+        for user_id in tqdm(all_users, desc=f'applying knn for {run_name} with k={current_k}'):
             history = user_history[user_id]
             user_vector = user_embs[user_id]
             _, indices = index.search(np.array([user_vector]), current_k + len(history))
@@ -97,11 +103,11 @@ def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|li
 
     return metrics_val_concat
 
-def knn(model_names, suffix, k, mode='val'):
+def knn(model_names, suffix, k, mode='val', use_lyrics=False):
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
     if isinstance(model_names, str):
         return calc_knn(model_names, train, val, test, mode, suffix, k)
     else:
-        return pd.concat([calc_knn(model_name, train, val, test, mode, suffix, k) for model_name in model_names])
+        return pd.concat([calc_knn(model_name, train, val, test, mode, suffix, k, use_lyrics) for model_name in model_names])
