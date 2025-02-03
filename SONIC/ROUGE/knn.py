@@ -1,4 +1,5 @@
 import os
+from pdb import run
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
@@ -28,7 +29,8 @@ def prepare_data(train, val, test, mode):
 
 
 def prepare_index(train, model_name, suffix, ie, use_lyrics):
-    tqdm.pandas(desc=f'computing user embeddings for {model_name}{"" if not use_lyrics else "+lyrics"}_{suffix}')
+    run_name = f'{model_name}{"" if not use_lyrics else "+lyrics"}_{suffix}'
+    tqdm.pandas(desc=f'computing user embeddings for {run_name}')
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
         emb_size = int(emb_size) if emb_size is not None else 104
