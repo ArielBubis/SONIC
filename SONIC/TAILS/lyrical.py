@@ -14,7 +14,7 @@ class LyricalEmbedder:
     """
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.text_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", device=self.device)
+        self.text_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2").to(self.device)
 
     def get_lyrics_embeddings(self, lyrics: str) -> np.ndarray:
         """
