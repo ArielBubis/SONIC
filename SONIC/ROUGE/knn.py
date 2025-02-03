@@ -64,7 +64,8 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics):
     return user_embs, index
 
 def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|list=50, use_lyrics=False):
-    run_name = f'{model_name}{'' if not use_lyrics else "+lyrics"}_{suffix}'
+    lyrical = "" if not use_lyrics else "+lyrics"
+    run_name = f'{model_name}{lyrical}_{suffix}'
     train, val, user_history, ie = prepare_data(train, val, test, mode)
 
     user_embs, index = prepare_index(train, model_name, suffix, ie, use_lyrics)
