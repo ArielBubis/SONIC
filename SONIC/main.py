@@ -100,6 +100,7 @@ def tui():
 def data_split(
     interactions_file: str = typer.Option(..., "--interactions-file", help="Path to the interactions file"),
     sep: str = typer.Option(',', "--sep", help="Delimiter used in the interactions file (csv only)"),
+    exclude: Optional[str] = typer.Option(None, "--exclude-file", help="Path to the exclude file"),
     start_date: str = typer.Option(CREAM.split.START_DATE, "--start-date", help="Start date for splitting data"),
     end_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="End date for splitting data"),
     test_date: str = typer.Option(CREAM.split.END_DATE, "--test-date", help="Test date for splitting data"),
@@ -114,7 +115,7 @@ def data_split(
         console.print(f"[bold red]Interactions file {interactions_file} does not exist.[/bold red]")
         raise typer.Exit()
     CREAM.utils.setup_logging('data_split.log')
-    CREAM.split.split_data(interactions_file, sep, start_date, test_date, end_date)
+    CREAM.split.split_data(interactions_file, sep, start_date, test_date, end_date, exclude_file=exclude)
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
@@ -147,6 +148,26 @@ def run_model(
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
+@app.command()
+def find_corrupt(
+    audio_dir: str = typer.Option(..., "--audio-dir", help="Directory containing audio files"),
+    loudness_threshold: float = typer.Option(..., "--loudness-threshold", help="Loudness threshold for corrupt audio files"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """
+    Find and remove corrupt audio files in the specified directory.
+    """
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+    CREAM.utils.setup_logging('find_corrupt.log')
+    corrupt = CREAM.utils.scan_corrupt_audio(audio_dir, loudness_threshold)
+
+    if corrupt:
+        CREAM.io.save_exclude_list(corrupt)
+        console.print(f"[bold red]Corrupt audio files saved to `exclude.pqt`[/bold red]")
+    
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
 if __name__ == "__main__":
     app()
