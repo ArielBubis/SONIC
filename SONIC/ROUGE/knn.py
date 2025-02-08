@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 import faiss
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, normalize
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 def prepare_data(train, val, test, mode):
@@ -46,14 +46,29 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics):
 
     if use_lyrics:
         lyrics_embs = pd.read_parquet('embeddings/lyrical.pqt').astype('float32').reset_index()
-        lyrics_embs['item_id'] = lyrics_embs['track_id'].apply(lambda x: x.split('/')[-1].split('.')[0])
-        item_embs = item_embs.merge(lyrics_embs, on='track_id', how='left')
+        lyrics_embs['track_id'] = lyrics_embs['track_id'].apply(lambda x: x.split('/')[-1].split('.')[0])
+        lyrics_embs = lyrics_embs[lyrics_embs.track_id.isin(train.track_id.unique())] \
+            .reset_index(drop=True).set_index('track_id')
+        lyrics_embs.columns = [f'lyrical_{col}' for col in lyrics_embs.columns]
+        item_embs.columns = [f'{col}@{model_name}' if col != 'track_id' else 'track_id' for col in item_embs.columns]
+
+        item_embs = item_embs.merge(lyrics_embs, on='track_id')
+
 
     item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
     item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
     user_embs = np.stack(train.groupby('user_id')['item_id'].progress_apply(lambda items: item_embs[items].mean(axis=0)).values)
 
     if suffix == 'cosine':
+        if use_lyrics:
+            audio_embs = item_embs[:, :-lyrics_embs.shape[1]]
+            lyrics_embs = item_embs[:, -lyrics_embs.shape[1]:]
+
+            audio_embs = normalize(audio_embs, axis=1)
+            lyrics_embs = normalize(lyrics_embs, axis=1)
+
+            # svd = TruncatedSVD(n_components=1, n_iter=7, random_state=42)
+
         user_embs = user_embs / np.linalg.norm(user_embs, axis=1, keepdims=True)
         item_embs = item_embs / np.linalg.norm(item_embs, axis=1, keepdims=True)
     index = faiss.IndexFlatIP(item_embs.shape[1])
