@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 from typing import Optional, List
-
+from SONIC.ROUGE import bert4rec
 app = typer.Typer()
 console = Console()
 
@@ -140,24 +140,37 @@ def run_model(
         ROUGE.knn.knn(embedding, suffix, k, mode)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
-    elif model_name == "bert4rec":
-        config_file = "bert4rec.yaml"  # Ensure this is correctly configured
-        model_path = "bert4rec.pth"
-                # Train if model file doesn't exist
-        if not os.path.exists(model_path):
-            console.print("[yellow]Training BERT4Rec model...[/yellow]")
-            model = ROUGE.bert4rec.train_bert4rec(config_file)
-            torch.save(model.state_dict(), model_path)
-        else:
-            console.print("[green]Loading trained BERT4Rec model...[/green]")
-            config, _, _, test_data = ROUGE.bert4rec.prepare_data(config_file)
-            model = ROUGE.bert4rec.BERT4Rec(config, test_data.dataset).to(config['device'])
-            model.load_state_dict(torch.load(model_path))
 
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
         console.print("[bold green]Running BERT4Rec model...[/bold green]")
         
+@app.command()
+def train_bert4rec(
+    config_file: str = typer.Option('bert4rec.yaml', help="Path to BERT4Rec config file"),
+    save_path: str = typer.Option('models/bert4rec.pth', help="Path to save the trained model"),
+):
+    """Train the BERT4Rec model."""
+    recommender = bert4rec.BERT4RecRecommender(config_file)
+    best_valid_result = recommender.train()
+    recommender.save_model(save_path)
+    console.print(f"Best Validation Result: {best_valid_result}")
+
+@app.command()
+def recommend_bert4rec(
+    load_path: str = typer.Option('models/bert4rec.pth', help="Path to load the trained model"),
+    interactions_file: str = typer.Option('data/interactions.pqt', help="Path to user interactions file"),
+    top_k: int = typer.Option(10, help="Number of recommendations per user"),
+):
+    """Generate recommendations using the BERT4Rec model."""
+    recommender = bert4rec.BERT4RecRecommender()
+    recommender.load_model(load_path)
+
+    user_interactions = pd.read_parquet(interactions_file)
+    recommendations = recommender.generate_recommendations(user_interactions, top_k)
+
+    for user_id, recs in recommendations.items():
+        console.print(f"User {user_id}: {recs}")
 
 if __name__ == "__main__":
     app()
