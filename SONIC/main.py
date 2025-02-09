@@ -140,10 +140,24 @@ def run_model(
         ROUGE.knn.knn(embedding, suffix, k, mode)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
-    
+    elif model_name == "bert4rec":
+        config_file = "bert4rec.yaml"  # Ensure this is correctly configured
+        model_path = "bert4rec.pth"
+                # Train if model file doesn't exist
+        if not os.path.exists(model_path):
+            console.print("[yellow]Training BERT4Rec model...[/yellow]")
+            model = ROUGE.bert4rec.train_bert4rec(config_file)
+            torch.save(model.state_dict(), model_path)
+        else:
+            console.print("[green]Loading trained BERT4Rec model...[/green]")
+            config, _, _, test_data = ROUGE.bert4rec.prepare_data(config_file)
+            model = ROUGE.bert4rec.BERT4Rec(config, test_data.dataset).to(config['device'])
+            model.load_state_dict(torch.load(model_path))
+
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
-
+        console.print("[bold green]Running BERT4Rec model...[/bold green]")
+        
 
 if __name__ == "__main__":
     app()
