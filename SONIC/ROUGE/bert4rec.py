@@ -1,66 +1,51 @@
 import os
+import logging
 import torch
 import pandas as pd
+import numpy as np
+from tqdm.auto import tqdm
+from recbole.quick_start import run_recbole
 from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
 from recbole.model.sequential_recommender import BERT4Rec
 from recbole.trainer import Trainer
-from recbole.utils import init_seed
+from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval
 
+def prepare_data(config_file="bert4rec.yaml"):
+    config = Config(model=BERT4Rec, config_file_list=[config_file])
+    dataset = create_dataset(config)
+    train_data, valid_data, test_data = data_preparation(config, dataset)
+    return config, train_data, valid_data, test_data
 
-class BERT4RecRecommender:
-    def __init__(self, config_file='bert4rec.yaml'):
-        """Initialize BERT4Rec Recommender with given config file."""
-        self.config = Config(model=BERT4Rec, config_file_list=[config_file])
-        init_seed(self.config['seed'], self.config['reproducibility'])
+def train_bert4rec(config_file="bert4rec.yaml"):
+    config, train_data, valid_data, _ = prepare_data(config_file)
+    model = BERT4Rec(config, train_data.dataset).to(config['device'])
+    trainer = Trainer(config, model)
+    best_valid_score, best_valid_result = trainer.fit(train_data, valid_data)
+    logging.info(f"Best validation result: {best_valid_result}")
+    return model
 
-        # Load dataset
-        self.dataset = create_dataset(self.config)
-        self.train_data, self.valid_data, self.test_data = data_preparation(self.config, self.dataset)
+def predict_bert4rec(model, test_data, k=50):
+    model.eval()
+    with torch.no_grad():
+        scores = model.full_sort_predict(test_data)
+    recommendations = {}
+    for user_id in tqdm(test_data.dataset.inter_feat['user_id'].unique(), desc='Generating recommendations'):
+        user_scores = scores[user_id].cpu().numpy()
+        top_items = np.argsort(user_scores)[::-1][:k]
+        recommendations[user_id] = top_items
+    return recommendations
 
-        # Initialize model
-        self.model = BERT4Rec(self.config, self.train_data.dataset).to(self.config['device'])
-        self.trainer = Trainer(self.config, self.model)
-
-    def train(self):
-        """Train the BERT4Rec model."""
-        best_valid_score, best_valid_result = self.trainer.fit(self.train_data, self.valid_data)
-        print("Best Validation Result:", best_valid_result)
-        self.save_model()
-        return best_valid_result
-
-    def save_model(self, save_path='models/bert4rec.pth'):
-        """Save the trained model."""
-        os.makedirs('models', exist_ok=True)
-        torch.save(self.model.state_dict(), save_path)
-        print(f"Model saved at {save_path}")
-
-    def load_model(self, load_path='models/bert4rec.pth'):
-        """Load a pre-trained BERT4Rec model."""
-        self.model.load_state_dict(torch.load(load_path, map_location=self.config['device']))
-        self.model.eval()
-        print(f"Model loaded from {load_path}")
-
-    def generate_recommendations(self, user_interactions, top_k=10):
-        """
-        Generate recommendations for users.
-
-        Args:
-            user_interactions (pd.DataFrame): User interaction history.
-            top_k (int): Number of recommendations per user.
-
-        Returns:
-            dict: User ID -> List of recommended item IDs.
-        """
-        user_history = user_interactions.groupby('user_id')['track_id'].apply(list).to_dict()
-        recommendations = {}
-
-        with torch.no_grad():
-            for user_id, history in user_history.items():
-                seq = torch.tensor(history[-self.config['max_seq_length']:], dtype=torch.long).to(self.config['device'])
-                seq = seq.unsqueeze(0)  # Add batch dimension
-                scores = self.model.full_sort_predict(seq)
-                top_items = torch.argsort(scores, descending=True)[0, :top_k].cpu().numpy()
-                recommendations[user_id] = top_items.tolist()
-
-        return recommendations
+def evaluate_bert4rec(model, test_data, k=[10, 20, 50]):
+    all_metrics = []
+    recommendations = predict_bert4rec(model, test_data, max(k))
+    for current_k in k:
+        filtered_recommendations = {user: items[:current_k] for user, items in recommendations.items()}
+        df = dict_to_pandas(filtered_recommendations)
+        os.makedirs('metrics', exist_ok=True)
+        metrics = calc_metrics(test_data.dataset.inter_feat, df, current_k)
+        metrics = metrics.apply(mean_confidence_interval)
+        all_metrics.append(metrics)
+    metrics_concat = pd.concat(all_metrics, axis=0) if len(k) > 1 else all_metrics[0]
+    metrics_concat.to_csv('metrics/bert4rec_metrics.csv')
+    return metrics_concat
