@@ -1,12 +1,16 @@
 import os
 import torch
 import pandas as pd
+import logging  # Add logging import
 from recbole.config import Config
 from recbole.data import create_dataset, data_preparation
 from recbole.model.sequential_recommender import BERT4Rec
 from recbole.trainer import Trainer
 from recbole.utils import init_seed
 
+# Configure logging to suppress specific warnings and errors
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 class BERT4RecRecommender:
     def __init__(self, config_file='bert4rec.yaml'):
