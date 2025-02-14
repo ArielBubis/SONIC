@@ -1,10 +1,12 @@
+from curses import meta
 import os
 from pdb import run
 import pandas as pd
 import numpy as np
+from sympy import use
 from tqdm.auto import tqdm
 import faiss
-from sklearn.preprocessing import LabelEncoder, normalize
+from sklearn.preprocessing import LabelEncoder, normalize, MinMaxScaler
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 def prepare_data(train, val, test, mode):
@@ -28,9 +30,10 @@ def prepare_data(train, val, test, mode):
     return train, val, user_history, ie
 
 
-def prepare_index(train, model_name, suffix, ie, use_lyrics):
+def prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata):
     lyrical = "" if not use_lyrics else "+lyrics"
-    run_name = f'{model_name}{lyrical}_{suffix}'
+    metadata = "" if not use_metadata else "+metadata"
+    run_name = f'{model_name}{lyrical}{metadata}_{suffix}'
     tqdm.pandas(desc=f'computing user embeddings for {run_name}')
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
@@ -54,6 +57,17 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics):
 
         item_embs = item_embs.merge(lyrics_embs, on='track_id')
 
+    if use_metadata:
+        min_max_scaler = MinMaxScaler()
+        metadata = pd.read_parquet('data/id_metadata.pqt')[['danceability', 'energy', 'valence', 'tempo']]
+
+        # normalize metadata
+        metadata_normed = pd.DataFrame(min_max_scaler.fit_transform(metadata), columns=metadata.columns)
+        metadata_normed.columns = [f'metadata_{col}' for col in metadata.columns]
+        metadata_normed['track_id'] = metadata.index
+
+        item_embs = item_embs.merge(metadata_normed, on='track_id')
+
 
     item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
     item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
@@ -67,8 +81,6 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics):
             audio_embs = normalize(audio_embs, axis=1)
             lyrics_embs = normalize(lyrics_embs, axis=1)
 
-            # svd = TruncatedSVD(n_components=1, n_iter=7, random_state=42)
-
         user_embs = user_embs / np.linalg.norm(user_embs, axis=1, keepdims=True)
         item_embs = item_embs / np.linalg.norm(item_embs, axis=1, keepdims=True)
     index = faiss.IndexFlatIP(item_embs.shape[1])
@@ -78,12 +90,13 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics):
 
     return user_embs, index
 
-def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|list=50, use_lyrics=False):
+def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|list=50, use_lyrics=False, use_metadata=False):
     lyrical = "" if not use_lyrics else "+lyrics"
-    run_name = f'{model_name}{lyrical}_{suffix}'
+    metadata = "" if not use_metadata else "+metadata"
+    run_name = f'{model_name}{lyrical}{metadata}_{suffix}'
     train, val, user_history, ie = prepare_data(train, val, test, mode)
 
-    user_embs, index = prepare_index(train, model_name, suffix, ie, use_lyrics)
+    user_embs, index = prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata)
 
     all_users = val.user_id.unique()
 
@@ -122,11 +135,14 @@ def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|li
 
     return metrics_val_concat
 
-def knn(model_names, suffix, k, mode='val', use_lyrics=False):
+def knn(model_names, suffix, k, mode='val', use_lyrics=False, use_metadata=False):
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
     if isinstance(model_names, str):
-        return calc_knn(model_names, train, val, test, mode, suffix, k)
+        return calc_knn(model_names, train, val, test, mode, suffix, k, use_lyrics, use_metadata)
     else:
-        return pd.concat([calc_knn(model_name, train, val, test, mode, suffix, k, use_lyrics) for model_name in model_names])
+        return pd.concat([
+            calc_knn(model_name, train, val, test, mode, suffix, k, use_lyrics, use_metadata) 
+            for model_name in model_names
+        ])

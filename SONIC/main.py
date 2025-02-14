@@ -128,6 +128,7 @@ def run_model(
     suffix: str = typer.Option('cosine', "--suffix", help="Suffix for the model name"),
     k: Optional[List[int]] = typer.Option([50], "--k", help="List of k nearest neighbors to retrieve"),
     use_lyrics: bool = typer.Option(False, "--use-lyrics", help="Use lyrics embeddings"),
+    use_metadata: bool = typer.Option(False, "--use-metadata", help="Use track metadata"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
     """
@@ -140,7 +141,7 @@ def run_model(
         raise typer.Exit()
     CREAM.utils.setup_logging('model_run.log')
     if model_name == 'knn':
-        ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics)
+        ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
     
