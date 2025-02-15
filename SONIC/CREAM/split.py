@@ -6,7 +6,7 @@ START_DATE = '2018-02-20'
 TEST_DATE = '2019-01-20'
 END_DATE = '2019-02-20'
 
-def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DATE, test_date: str=TEST_DATE, end_date: str = END_DATE) -> None:
+def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DATE, test_date: str=TEST_DATE, end_date: str = END_DATE, exclude_file: str=None) -> None:
     """
     Split the interactions data into train, validation, and test sets, based on the given dates.
     Parameters:
@@ -14,6 +14,8 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
         sep (str): Delimiter used in the interactions data file (csv only, default: ',').
         start_date (str): Start date for the train set.
         test_date (str): Start date for the test set.
+        end_date (str): End date for the train and validation sets.
+        exclude_file (str): Path to the file containing track ids to exclude from the whole dataset.
     Returns:
         None
     """
@@ -22,6 +24,11 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
     else:
         df = pd.read_csv(interactions_df_path, sep=sep)
         df.timestamp = pd.to_datetime(df.timestamp).dt.floor('min')
+
+    if exclude_file:
+        exclude = pd.read_parquet(exclude_file)
+        print(exclude)
+        df = df[~df.track_id.isin(exclude.track_id)]
 
     df = df[(df.timestamp >= pd.to_datetime(start_date)) & (df.timestamp < pd.to_datetime(end_date))]
 
@@ -38,7 +45,7 @@ def split_data(interactions_df_path: str, sep: str=',' ,start_date: str=START_DA
     val = te[te.user_id.isin(validation_user_ids)].reset_index(drop=True)
     test = te[te.user_id.isin(test_user_ids)].reset_index(drop=True)
 
-    logging.info(f"Interactions data loaded from {interactions_df_path}")
+    logging.info(f"Interactions data loaded from {interactions_df_path}" + (f" (excluding {len(exclude):,} tracks)" if exclude_file else ""))
     logging.info(f"Data split based on the following dates:")
     logging.info(f"Start date: {start_date}")
     logging.info(f"End date: {end_date}")
