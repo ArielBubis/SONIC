@@ -1,5 +1,6 @@
 from poplib import CR
 from click import Option
+from sympy import use
 import torch
 from . import CREAM
 from . import TAILS
@@ -10,7 +11,7 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 from typing import Optional, List
-from SONIC.ROUGE import bert4rec
+
 app = typer.Typer()
 console = Console()
 
@@ -99,6 +100,7 @@ def tui():
 def data_split(
     interactions_file: str = typer.Option(..., "--interactions-file", help="Path to the interactions file"),
     sep: str = typer.Option(',', "--sep", help="Delimiter used in the interactions file (csv only)"),
+    exclude: Optional[str] = typer.Option(None, "--exclude-file", help="Path to the exclude file"),
     start_date: str = typer.Option(CREAM.split.START_DATE, "--start-date", help="Start date for splitting data"),
     end_date: str = typer.Option(CREAM.split.TEST_DATE, "--end-date", help="End date for splitting data"),
     test_date: str = typer.Option(CREAM.split.END_DATE, "--test-date", help="Test date for splitting data"),
@@ -113,7 +115,7 @@ def data_split(
         console.print(f"[bold red]Interactions file {interactions_file} does not exist.[/bold red]")
         raise typer.Exit()
     CREAM.utils.setup_logging('data_split.log')
-    CREAM.split.split_data(interactions_file, sep, start_date, test_date, end_date)
+    CREAM.split.split_data(interactions_file, sep, start_date, test_date, end_date, exclude_file=exclude)
     
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
@@ -125,6 +127,8 @@ def run_model(
     mode: str = typer.Option('val', "--mode", help="Mode for running the model (val or test)"),
     suffix: str = typer.Option('cosine', "--suffix", help="Suffix for the model name"),
     k: Optional[List[int]] = typer.Option([50], "--k", help="List of k nearest neighbors to retrieve"),
+    use_lyrics: bool = typer.Option(False, "--use-lyrics", help="Use lyrics embeddings"),
+    use_metadata: bool = typer.Option(False, "--use-metadata", help="Use track metadata"),
     profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
     """
@@ -137,40 +141,34 @@ def run_model(
         raise typer.Exit()
     CREAM.utils.setup_logging('model_run.log')
     if model_name == 'knn':
-        ROUGE.knn.knn(embedding, suffix, k, mode)
+        ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
-
+    
+    
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
-        console.print("[bold green]Running BERT4Rec model...[/bold green]")
-        
-@app.command()
-def train_bert4rec(
-    config_file: str = typer.Option('bert4rec.yaml', help="Path to BERT4Rec config file"),
-    save_path: str = typer.Option('models/bert4rec.pth', help="Path to save the trained model"),
-):
-    """Train the BERT4Rec model."""
-    recommender = bert4rec.BERT4RecRecommender(config_file)
-    best_valid_result = recommender.train()
-    recommender.save_model(save_path)
-    console.print(f"Best Validation Result: {best_valid_result}")
 
 @app.command()
-def recommend_bert4rec(
-    load_path: str = typer.Option('models/bert4rec.pth', help="Path to load the trained model"),
-    interactions_file: str = typer.Option('data/interactions.pqt', help="Path to user interactions file"),
-    top_k: int = typer.Option(10, help="Number of recommendations per user"),
+def find_corrupt(
+    audio_dir: str = typer.Option(..., "--audio-dir", help="Directory containing audio files"),
+    loudness_threshold: float = typer.Option(..., "--loudness-threshold", help="Loudness threshold for corrupt audio files"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
 ):
-    """Generate recommendations using the BERT4Rec model."""
-    recommender = bert4rec.BERT4RecRecommender()
-    recommender.load_model(load_path)
+    """
+    Find and remove corrupt audio files in the specified directory.
+    """
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+    CREAM.utils.setup_logging('find_corrupt.log')
+    corrupt = CREAM.utils.scan_corrupt_audio(audio_dir, loudness_threshold)
 
-    user_interactions = pd.read_parquet(interactions_file)
-    recommendations = recommender.generate_recommendations(user_interactions, top_k)
-
-    for user_id, recs in recommendations.items():
-        console.print(f"User {user_id}: {recs}")
+    if corrupt:
+        CREAM.io.save_exclude_list(corrupt)
+        console.print(f"[bold red]Corrupt audio files saved to `exclude.pqt`[/bold red]")
+    
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
 if __name__ == "__main__":
     app()
