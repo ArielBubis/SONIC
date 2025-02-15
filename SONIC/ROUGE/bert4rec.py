@@ -1,66 +1,250 @@
-import os
 import torch
+import torch.nn as nn
+from transformers import BertModel, BertConfig
+import os
+import numpy as np
+from tqdm.auto import tqdm
+from typing import Dict, Any, Optional
 import pandas as pd
-from recbole.config import Config
-from recbole.data import create_dataset, data_preparation
-from recbole.model.sequential_recommender import BERT4Rec
-from recbole.trainer import Trainer
-from recbole.utils import init_seed
+from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
+
+class BERT4Rec(nn.Module):
+    def __init__(
+        self, 
+        vocab_size: int,
+        bert_config: Dict[str, Any],
+        precomputed_item_embeddings: Optional[np.ndarray] = None,
+        add_head: bool = True,
+        tie_weights: bool = True,
+        padding_idx: int = -1,
+        init_std: float = 0.02
+    ):
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.bert_config = bert_config
+        self.add_head = add_head
+        self.tie_weights = tie_weights
+        self.padding_idx = padding_idx
+        self.init_std = init_std
+
+        if precomputed_item_embeddings is not None:
+            precomputed_item_embeddings = torch.from_numpy(
+                precomputed_item_embeddings.astype(np.float32)
+            )
+            projection = nn.Linear(384, 256)
+            precomputed_item_embeddings = projection(precomputed_item_embeddings)
+            self.item_embeddings = nn.Embedding.from_pretrained(
+                precomputed_item_embeddings,
+                padding_idx=padding_idx
+            )
+        else:
+            self.item_embeddings = nn.Embedding(
+                num_embeddings=vocab_size,
+                embedding_dim=bert_config['hidden_size'],
+                padding_idx=padding_idx
+            )
+
+        self.transformer_model = BertModel(BertConfig(**bert_config))
+
+        if self.add_head:
+            self.head = nn.Linear(
+                bert_config['hidden_size'],
+                vocab_size,
+                bias=False
+            )
+            if self.tie_weights:
+                self.head.weight = nn.Parameter(self.item_embeddings.weight)
+
+        if precomputed_item_embeddings is None:
+            self.item_embeddings.weight.data.normal_(mean=0.0, std=self.init_std)
+        if self.padding_idx is not None:
+            self.item_embeddings.weight.data[self.padding_idx].zero_()
+
+    def freeze_item_embs(self, flag: bool) -> None:
+        self.item_embeddings.weight.requires_grad = flag
+
+    def forward(
+        self, 
+        input_ids: torch.Tensor, 
+        attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        embeds = self.item_embeddings(input_ids)
+        transformer_outputs = self.transformer_model(
+            inputs_embeds=embeds,
+            attention_mask=attention_mask
+        )
+        outputs = transformer_outputs.last_hidden_state
+
+        if self.add_head:
+            outputs = self.head(outputs)
+
+        return outputs
+    
+
+def train_bert4rec(
+    train_data: str,
+    val_data: str,
+    model_save_path: str,
+    batch_size: int = 128,
+    num_epochs: int = 200,
+    hidden_dim: int = 256,
+    lr: float = 0.001
+) -> None:
+    """Train BERT4Rec model"""
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for BERT4Rec training")
+    
+    train = pd.read_parquet(train_data)
+    val = pd.read_parquet(val_data)
+    
+    # Model configuration
+    model_config = {
+        'vocab_size': len(train['track_id'].unique()),
+        'max_position_embeddings': 200,
+        'hidden_size': hidden_dim,
+        'num_hidden_layers': 2,
+        'num_attention_heads': 4,
+        'intermediate_size': hidden_dim * 4
+    }
+    
+    # Initialize model
+    model = BERT4Rec(
+        vocab_size=model_config['vocab_size'],
+        bert_config=model_config,
+        padding_idx=model_config['vocab_size'] - 1
+    )
+    model.to('cuda')
 
 
-class BERT4RecRecommender:
-    def __init__(self, config_file='bert4rec.yaml'):
-        """Initialize BERT4Rec Recommender with given config file."""
-        self.config = Config(model=BERT4Rec, config_file_list=[config_file])
-        init_seed(self.config['seed'], self.config['reproducibility'])
+    # Save model
+    os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'config': model_config,
+    }, model_save_path)
 
-        # Load dataset
-        self.dataset = create_dataset(self.config)
-        self.train_data, self.valid_data, self.test_data = data_preparation(self.config, self.dataset)
+def load_bert4rec(model_path: str) -> BERT4Rec:
+    """Load trained BERT4Rec model"""
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"No model found at {model_path}")
+    
+    checkpoint = torch.load(model_path, map_location='cpu')
+    model = BERT4Rec(
+        vocab_size=checkpoint['config']['vocab_size'],
+        bert_config=checkpoint['config'],
+        padding_idx=checkpoint['config']['vocab_size'] - 1
+    )
+    model.load_state_dict(checkpoint['model_state_dict'])
+    return model
 
-        # Initialize model
-        self.model = BERT4Rec(self.config, self.train_data.dataset).to(self.config['device'])
-        self.trainer = Trainer(self.config, self.model)
 
-    def train(self):
-        """Train the BERT4Rec model."""
-        best_valid_score, best_valid_result = self.trainer.fit(self.train_data, self.valid_data)
-        print("Best Validation Result:", best_valid_result)
-        self.save_model()
-        return best_valid_result
+def prepare_bert_data(train, val, test, mode='val'):
+    """Prepare data for BERT4Rec model using existing utils"""
+    if mode == 'test':
+        train = pd.concat([train, val], ignore_index=True).reset_index(drop=True)
+        val = test
+    del test
+    
+    train['item_id'] = train['track_id']
+    val['item_id'] = val['track_id']
 
-    def save_model(self, save_path='models/bert4rec.pth'):
-        """Save the trained model."""
-        os.makedirs('models', exist_ok=True)
-        torch.save(self.model.state_dict(), save_path)
-        print(f"Model saved at {save_path}")
+    ue = LabelEncoder()
+    ie = LabelEncoder()
+    train['user_id'] = ue.fit_transform(train['user_id'])
+    train['item_id'] = ie.fit_transform(train['track_id'])
+    val['user_id'] = ue.transform(val['user_id'])
+    val['item_id'] = ie.transform(val['track_id'])
 
-    def load_model(self, load_path='models/bert4rec.pth'):
-        """Load a pre-trained BERT4Rec model."""
-        self.model.load_state_dict(torch.load(load_path, map_location=self.config['device']))
-        self.model.eval()
-        print(f"Model loaded from {load_path}")
+    user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
+    return train, val, user_history, ie
 
-    def generate_recommendations(self, user_interactions, top_k=10):
-        """
-        Generate recommendations for users.
+def calc_bert4rec(
+    model_name: str,
+    train: pd.DataFrame,
+    val: pd.DataFrame,
+    test: pd.DataFrame,
+    mode: str = 'val',
+    suffix: str = "cosine",
+    k: int | list = 50
+) -> pd.DataFrame:
+    """Calculate metrics for BERT4Rec model"""
+    run_name = f'{model_name}_{suffix}'
+    train, val, user_history, ie = prepare_bert_data(train, val, test, mode)
+    
+    # Load model checkpoint
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    checkpoint_path = f'checkpoints/BERT4Rec/{run_name}_best.pt'
+    
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model = BERT4Rec(
+        vocab_size=len(train['item_id'].unique()),
+        bert_config=checkpoint['config'],
+        padding_idx=len(train['item_id'].unique()) - 1
+    )
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.to(device)
+    
+    # Get embeddings
+    item_embs = model.item_embeddings.weight.detach().cpu().numpy()
+    
+    all_users = val.user_id.unique()
+    if isinstance(k, int):
+        k = [k]
 
-        Args:
-            user_interactions (pd.DataFrame): User interaction history.
-            top_k (int): Number of recommendations per user.
+    all_metrics_val = []
+    
+    for current_k in k:
+        user_recommendations = {}
+        for user_id in tqdm(all_users, desc=f'applying BERT4Rec for {model_name} with k={current_k}'):
+            history = user_history.get(user_id, set())
+            user_items = torch.LongTensor([list(history)]).to(device)
+            with torch.no_grad():
+                user_vector = model.item_embeddings(user_items).mean(dim=1).cpu().numpy()[0]
+            
+            scores = np.dot(item_embs, user_vector)
+            recommendations = np.argsort(scores)[::-1]
+            filtered_recommendations = [idx for idx in recommendations if idx not in history][:current_k]
+            user_recommendations[user_id] = filtered_recommendations
+            
+        df = dict_to_pandas(user_recommendations)
+        
+        os.makedirs('metrics', exist_ok=True)
+        metrics_val = calc_metrics(val, df, current_k)
+        metrics_val = metrics_val.apply(mean_confidence_interval)
+        
+        if len(k) > 1:
+            metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+            metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
+            
+        all_metrics_val.append(metrics_val)
+    
+    if len(k) > 1:
+        metrics_val_concat = pd.concat(all_metrics_val, axis=0)
+    else:
+        metrics_val_concat = all_metrics_val[0]
+        
+    metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+    
+    return metrics_val_concat
 
-        Returns:
-            dict: User ID -> List of recommended item IDs.
-        """
-        user_history = user_interactions.groupby('user_id')['track_id'].apply(list).to_dict()
-        recommendations = {}
-
-        with torch.no_grad():
-            for user_id, history in user_history.items():
-                seq = torch.tensor(history[-self.config['max_seq_length']:], dtype=torch.long).to(self.config['device'])
-                seq = seq.unsqueeze(0)  # Add batch dimension
-                scores = self.model.full_sort_predict(seq)
-                top_items = torch.argsort(scores, descending=True)[0, :top_k].cpu().numpy()
-                recommendations[user_id] = top_items.tolist()
-
-        return recommendations
+def bert4rec(
+    model_names: str | list,
+    suffix: str,
+    k: int | list,
+    mode: str = 'val'
+) -> pd.DataFrame:
+    """Main function to evaluate BERT4Rec models"""
+    train = pd.read_parquet('data/train.pqt')
+    val = pd.read_parquet('data/validation.pqt')
+    test = pd.read_parquet('data/test.pqt')
+    
+    if isinstance(model_names, str):
+        return calc_bert4rec(model_names, train, val, test, mode, suffix, k)
+    else:
+        return pd.concat([
+            calc_bert4rec(model_name, train, val, test, mode, suffix, k) 
+            for model_name in model_names
+        ])
