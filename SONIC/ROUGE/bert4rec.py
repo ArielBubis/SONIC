@@ -184,6 +184,7 @@ def calc_bert4rec(
         # Create model using original BERT4Rec class
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
+            bert_config=model_config,
             precomputed_item_embeddings=item_embs,
             padding_idx=model_config['vocab_size'] - 1
         )
