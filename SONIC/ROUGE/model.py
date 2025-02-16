@@ -12,7 +12,7 @@ class BERT4Rec(nn.Module):
         precomputed_item_embeddings: Optional[np.ndarray] = None,
         add_head: bool = True,
         tie_weights: bool = True,
-        padding_idx: int = -2,
+        padding_idx: int = -1,
         init_std: float = 0.02
     ):
         super().__init__()
