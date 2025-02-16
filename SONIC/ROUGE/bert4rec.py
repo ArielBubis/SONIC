@@ -220,7 +220,6 @@ def calc_bert4rec(
                 
                 with torch.no_grad():
                     outputs = model(input_ids, attention_mask)
-                    print(f"Model output shape: {outputs.shape}")  # Should be (batch_size, seq_len, vocab_size)
                     scores = outputs[:, -1, :-2]  # Last position, exclude mask and pad tokens
                     
                     # Get top-k items
