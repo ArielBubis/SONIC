@@ -182,15 +182,17 @@ def calc_bert4rec(
         
         # Get item embeddings
         item_embs = load_embeddings(model_name, train, ie)
-        
-        model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
-        model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
+        item_embs = load_embeddings(model_name, train, ie)
+        input_dim = item_embs.shape[1]  # Original embedding dimension
+        hidden_dim = model_config["hidden_size"]  # Target BERT dimension
+        projection_dim = (input_dim + hidden_dim) // 2
 
         # Create model using original BERT4Rec class
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
+            projection_dim=projection_dim,
             padding_idx=model_config['vocab_size'] - 3
         )
         model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
@@ -288,7 +290,7 @@ def calc_bert4rec(
         
         metrics_val = calc_metrics(val, df, current_k)
         metrics_val = metrics_val.apply(mean_confidence_interval)
-        
+
         metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
         if len(k) > 1:
             metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
