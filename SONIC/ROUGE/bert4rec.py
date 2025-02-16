@@ -196,6 +196,7 @@ def calc_bert4rec(
         )
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
+        model_config['vocab_size'] = len(train['item_id'].unique()) + 3  # Add special tokens
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
