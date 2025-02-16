@@ -70,11 +70,23 @@ def calc_bert4rec(
             raise FileNotFoundError(f"Checkpoint not found at {pretrained_path}")
         
         checkpoint = torch.load(pretrained_path, map_location=device)
+        
+        # Create model with projection layer matching checkpoint
+        model_config = checkpoint['config']
+        
+        # Get item embeddings to determine input dimension
+        item_embs = load_embeddings(model_name, train, ie)
+        input_dim = item_embs.shape[1]
+        
         model = BERT4Rec(
-            vocab_size=checkpoint['config']['vocab_size'],
-            bert_config=checkpoint['config'],
-            padding_idx=checkpoint['config']['vocab_size'] - 1
+            vocab_size=model_config['vocab_size'],
+            bert_config=model_config,
+            precomputed_item_embeddings=item_embs,
+            padding_idx=model_config['vocab_size'] - 1,
+            projection_dim=model_config['hidden_size']
         )
+        
+        # Load state dict
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
         # Get embeddings for new model
