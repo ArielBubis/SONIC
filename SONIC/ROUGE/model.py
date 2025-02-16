@@ -30,7 +30,7 @@ class BERT4Rec(nn.Module):
             )
             # Determine input dimension from the embeddings
             input_dim = precomputed_item_embeddings.size(1)
-            projection = nn.Linear(input_dim, 256)  # Project to fixed size
+            projection = nn.Linear(input_dim, 256)  
             # projection = nn.Linear(384, 256)
             precomputed_item_embeddings = projection(precomputed_item_embeddings)
             self.item_embeddings = nn.Embedding.from_pretrained(
