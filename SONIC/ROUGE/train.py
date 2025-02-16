@@ -3,10 +3,13 @@ import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import os
 from tqdm.auto import tqdm
+from torch.utils.data import DataLoader
+import torch.nn as nn
+from typing import Dict, Any
 
 @dataclass
 class TrainingConfig:
-    """Configuration for BERT4Rec training."""
+    """Configuration for model training."""
     model_name: str = "BERT4Rec"
     max_seq_len: int = 128
     batch_size: int = 128
@@ -17,19 +20,21 @@ class TrainingConfig:
     grad_clip_norm: float = 1.0
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-class BERT4RecTrainer:
-    """Trainer class for BERT4Rec model."""
+class ModelTrainer:
+    """Generic trainer class for recommendation models."""
     def __init__(
         self,
-        model: BERT4Rec,
+        model: nn.Module,
         config: TrainingConfig,
         train_loader: DataLoader,
-        val_loader: DataLoader
+        val_loader: DataLoader,
+        criterion: nn.Module = None
     ):
         self.model = model.to(config.device)
         self.config = config
         self.train_loader = train_loader
         self.val_loader = val_loader
+        self.criterion = criterion or nn.CrossEntropyLoss(ignore_index=-100).to(config.device)
         
         self.optimizer = torch.optim.AdamW(
             model.parameters(),
@@ -41,7 +46,6 @@ class BERT4RecTrainer:
             T_max=config.num_epochs,
             eta_min=1e-6
         )
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-100).to(config.device)
         self.scaler = torch.cuda.amp.GradScaler()
         
         self.best_val_loss = float('inf')
