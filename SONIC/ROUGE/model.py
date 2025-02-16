@@ -32,9 +32,13 @@ class BERT4Rec(nn.Module):
             input_dim = precomputed_item_embeddings.size(1)
             projection = nn.Linear(input_dim, 256)  
             # projection = nn.Linear(384, 256)
-            precomputed_item_embeddings = projection(precomputed_item_embeddings)
+            projected_embeddings = projection(precomputed_item_embeddings)
+            
+            full_embeddings = torch.zeros(vocab_size, 256)  # Initialize with zeros
+            full_embeddings[:len(precomputed_item_embeddings)] = projected_embeddings  # Copy projected embeddings
+            
             self.item_embeddings = nn.Embedding.from_pretrained(
-                precomputed_item_embeddings,
+                full_embeddings,
                 padding_idx=padding_idx
             )
         else:
