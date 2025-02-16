@@ -12,6 +12,20 @@ from rich.console import Console
 from rich.prompt import Prompt
 from typing import Optional, List
 
+import torch
+from . import CREAM
+from . import TAILS
+from . import ROUGE
+import os
+from ROUGE.bert4rec import (
+    BERT4Rec, 
+    BERT4RecTrainer, 
+    BERT4RecEvaluator,
+    TrainingConfig,
+    MaskedLMDataset,
+    PredictionDataset,
+    PaddingCollateFn
+)
 app = typer.Typer()
 console = Console()
 
@@ -145,7 +159,6 @@ def run_model(
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
     
-    
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
@@ -167,6 +180,178 @@ def find_corrupt(
         CREAM.io.save_exclude_list(corrupt)
         console.print(f"[bold red]Corrupt audio files saved to `exclude.pqt`[/bold red]")
     
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
+
+@app.command()
+def train_bert(
+    train_file: str = typer.Option(..., "--train-file", help="Path to training data parquet file"),
+    val_file: str = typer.Option(..., "--val-file", help="Path to validation data parquet file"),
+    embedding_model: str = typer.Option(..., "--embedding-model", help="Name of embedding model to use"),
+    max_seq_len: int = typer.Option(128, "--max-seq-len", help="Maximum sequence length"),
+    batch_size: int = typer.Option(128, "--batch-size", help="Training batch size"),
+    num_epochs: int = typer.Option(200, "--num-epochs", help="Number of training epochs"),
+    lr: float = typer.Option(0.001, "--lr", help="Learning rate"),
+    hidden_dim: int = typer.Option(256, "--hidden-dim", help="Hidden dimension size"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """Train BERT4Rec model with specified parameters."""
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+
+    try:
+        # Load data
+        train_data = pd.read_parquet(train_file)
+        val_data = pd.read_parquet(val_file)
+        
+        # Load embeddings
+        item_embeddings = CREAM.utils.load_embeddings(embedding_model, train_data)
+        
+        # Create config
+        config = TrainingConfig(
+            model_name="BERT4Rec",
+            max_seq_len=max_seq_len,
+            batch_size=batch_size,
+            num_epochs=num_epochs,
+            lr=lr
+        )
+        
+        # Initialize datasets
+        item_count = train_data.item_id.nunique() + 2
+        train_dataset = MaskedLMDataset(
+            train_data,
+            max_length=max_seq_len,
+            masking_value=item_count-2
+        )
+        val_dataset = MaskedLMDataset(
+            val_data,
+            max_length=max_seq_len,
+            masking_value=item_count-2
+        )
+        
+        # Create dataloaders
+        collate_fn = PaddingCollateFn(padding_value=item_count-1)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            collate_fn=collate_fn
+        )
+        val_loader = torch.utils.data.DataLoader(
+            val_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=collate_fn
+        )
+        
+        # Initialize model
+        model_config = {
+            'vocab_size': item_count,
+            'max_position_embeddings': max(200, max_seq_len),
+            'hidden_size': hidden_dim,
+            'num_hidden_layers': 2,
+            'num_attention_heads': 4,
+            'intermediate_size': hidden_dim * 4
+        }
+        
+        model = BERT4Rec(
+            vocab_size=item_count,
+            bert_config=model_config,
+            precomputed_item_embeddings=item_embeddings,
+            padding_idx=item_count-1
+        )
+        
+        # Initialize trainer
+        trainer = BERT4RecTrainer(
+            model=model,
+            config=config,
+            train_loader=train_loader,
+            val_loader=val_loader
+        )
+        
+        # Train model
+        best_val_loss = trainer.train()
+        console.print(f"[green]Training completed with best validation loss: {best_val_loss:.4f}[/green]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error during training: {str(e)}[/bold red]")
+        raise typer.Exit(1)
+
+    if profile:
+        CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
+
+@app.command()
+def evaluate_bert(
+    model_path: str = typer.Option(..., "--model-path", help="Path to trained model checkpoint"),
+    test_file: str = typer.Option(..., "--test-file", help="Path to test data parquet file"),
+    k: List[int] = typer.Option([10, 50, 100], "--k", help="List of k values for evaluation"),
+    batch_size: int = typer.Option(128, "--batch-size", help="Batch size for evaluation"),
+    profile: bool = typer.Option(False, "--profile", help="Enable profiling"),
+):
+    """Evaluate trained BERT4Rec model and generate recommendations."""
+    if profile:
+        profiler = CREAM.utils.start_profiler()
+
+    try:
+        # Load test data
+        test_data = pd.read_parquet(test_file)
+        
+        # Load model checkpoint
+        checkpoint = torch.load(model_path)
+        config = TrainingConfig(batch_size=batch_size)
+        
+        model = BERT4Rec(
+            vocab_size=checkpoint['model_config']['vocab_size'],
+            bert_config=checkpoint['model_config'],
+            padding_idx=checkpoint['model_config']['vocab_size'] - 1
+        )
+        model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Create prediction dataset and loader
+        pred_dataset = PredictionDataset(
+            test_data,
+            max_length=config.max_seq_len,
+            masking_value=test_data.item_id.nunique()
+        )
+        pred_loader = torch.utils.data.DataLoader(
+            pred_dataset,
+            batch_size=batch_size,
+            shuffle=False,
+            collate_fn=PaddingCollateFn()
+        )
+        
+        # Initialize evaluator
+        evaluator = BERT4RecEvaluator(
+            model=model,
+            config=config,
+            pred_loader=pred_loader
+        )
+        
+        # Generate and evaluate recommendations
+        for current_k in k:
+            recommendations = evaluator.generate_recommendations(k=current_k)
+            metrics = evaluator.evaluate_recommendations(
+                recommendations,
+                test_data,
+                k=current_k
+            )
+            
+            # Save results
+            os.makedirs('metrics', exist_ok=True)
+            metrics.to_csv(f'metrics/bert4rec_k{current_k}.csv')
+            
+            # Save recommendations
+            os.makedirs('preds', exist_ok=True)
+            recommendations_df = CREAM.utils.dict_to_pandas(recommendations)
+            recommendations_df.to_parquet(f'preds/bert4rec_k{current_k}.pqt')
+            
+            console.print(f"[green]Evaluation completed for k={current_k}[/green]")
+            console.print(metrics.mean().to_dict())
+
+    except Exception as e:
+        console.print(f"[bold red]Error during evaluation: {str(e)}[/bold red]")
+        raise typer.Exit(1)
+
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 

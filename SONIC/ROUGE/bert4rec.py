@@ -1,10 +1,11 @@
+from sklearn.calibration import LabelEncoder
 import torch
 import torch.nn as nn
 from transformers import BertModel, BertConfig
 import os
 import numpy as np
 from tqdm.auto import tqdm
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import pandas as pd
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
@@ -13,11 +14,13 @@ class BERT4Rec(nn.Module):
         self, 
         vocab_size: int,
         bert_config: Dict[str, Any],
+        model_names: List[str] = None,
         precomputed_item_embeddings: Optional[np.ndarray] = None,
         add_head: bool = True,
         tie_weights: bool = True,
         padding_idx: int = -1,
-        init_std: float = 0.02
+        init_std: float = 0.02,
+        projection_dim: int = 256
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -31,7 +34,8 @@ class BERT4Rec(nn.Module):
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
             )
-            projection = nn.Linear(384, 256)
+            # Project embeddings to desired dimension
+            projection = nn.Linear(precomputed_item_embeddings.size(1), projection_dim)
             precomputed_item_embeddings = projection(precomputed_item_embeddings)
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
@@ -85,6 +89,7 @@ def train_bert4rec(
     train_data: str,
     val_data: str,
     model_save_path: str,
+    model_names: List[str],
     batch_size: int = 128,
     num_epochs: int = 200,
     hidden_dim: int = 256,
@@ -96,7 +101,12 @@ def train_bert4rec(
     
     train = pd.read_parquet(train_data)
     val = pd.read_parquet(val_data)
-    
+
+    # Prepare data and get embeddings
+    train, val, _, ie = prepare_bert_data(train, val, None, 'val')
+    precomputed_embeddings = load_embeddings(model_names, train, ie)
+
+
     # Model configuration
     model_config = {
         'vocab_size': len(train['track_id'].unique()),
@@ -111,16 +121,17 @@ def train_bert4rec(
     model = BERT4Rec(
         vocab_size=model_config['vocab_size'],
         bert_config=model_config,
+        precomputed_item_embeddings=precomputed_embeddings,
         padding_idx=model_config['vocab_size'] - 1
     )
     model.to('cuda')
-
 
     # Save model
     os.makedirs(os.path.dirname(model_save_path), exist_ok=True)
     torch.save({
         'model_state_dict': model.state_dict(),
         'config': model_config,
+        'model_names': model_names
     }, model_save_path)
 
 def load_bert4rec(model_path: str) -> BERT4Rec:
@@ -136,6 +147,41 @@ def load_bert4rec(model_path: str) -> BERT4Rec:
     )
     model.load_state_dict(checkpoint['model_state_dict'])
     return model
+
+def load_embeddings(model_names: List[str], train: pd.DataFrame, ie: LabelEncoder):
+    """
+    Load and combine multiple embeddings.
+    
+    Parameters:
+        model_names (List[str]): List of embedding model names
+        train (pd.DataFrame): Training data
+        ie (LabelEncoder): Item label encoder
+    
+    Returns:
+        np.ndarray: Combined embeddings matrix
+    """
+    all_embeddings = []
+    
+    for model_name in model_names:
+        if 'mfcc' in model_name:
+            _, emb_size = safe_split(model_name)
+            emb_size = int(emb_size) if emb_size is not None else 104
+            item_embs = pd.read_parquet(f'embeddings/{model_name.split("_")[0]}.pqt').reset_index()
+            item_embs = item_embs[item_embs.columns[:emb_size]]
+        else:
+            item_embs = pd.read_parquet(f'embeddings/{model_name}.pqt').reset_index()
+        
+        item_embs['track_id'] = item_embs['track_id'].apply(lambda x: x.split('.')[0])
+        item_embs = item_embs[item_embs.track_id.isin(train.track_id.unique())].reset_index(drop=True)
+        item_embs.index = ie.transform(item_embs.track_id).astype('int')
+        item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
+        item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
+        
+        all_embeddings.append(item_embs)
+    
+    # Concatenate all embeddings
+    combined_embeddings = np.concatenate(all_embeddings, axis=1)
+    return combined_embeddings
 
 
 def prepare_bert_data(train, val, test, mode='val'):
