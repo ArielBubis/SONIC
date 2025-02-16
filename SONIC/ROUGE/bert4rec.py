@@ -43,8 +43,8 @@ def prepare_data(train, val, test, mode='val'):
     ie = LabelEncoder()
     train['user_id'] = ue.fit_transform(train['user_id'])
     train['item_id'] = ie.fit_transform(train['track_id'])
-    val['user_id'] = ue.fit_transform(val['user_id'])
-    val['item_id'] = ie.fit_transform(val['track_id'])
+    val['user_id'] = ue.transform(val['user_id'])
+    val['item_id'] = ie.transform(val['track_id'])
 
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
