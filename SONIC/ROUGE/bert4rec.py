@@ -216,8 +216,11 @@ def calc_bert4rec(
 
         for current_k in k:
             user_recommendations = generate_recommendations(
-                pred_loader,
-                user_history
+                model=model,
+                pred_loader=val_loader,
+                user_history=user_history,
+                device=device,
+                k=max(k)  # Use maximum k value if k is a list
             )
 
             df = dict_to_pandas(user_recommendations)
@@ -346,23 +349,20 @@ def generate_recommendations(
             user_ids = batch['user_id']
 
             outputs = model(input_ids, attention_mask)
-            seq_lengths = attention_mask.sum(dim=1).long()
+            seq_lengths = attention_mask.sum(dim=1).long() 
 
-            # Get predictions for last position
             last_item_logits = torch.stack([
                 outputs[i, seq_lengths[i] - 1, :]
                 for i in range(len(seq_lengths))
             ])
-            last_item_logits = last_item_logits[:, :-2]  # Remove mask and padding tokens
+            last_item_logits = last_item_logits[:, :-2]
             
-            # Get top-k predictions
             scores, preds = torch.topk(last_item_logits, k=k, dim=-1)
             preds = preds.cpu().numpy()
 
-            # Filter and store recommendations
             for user_id, item_ids in zip(user_ids, preds):
-                history = user_history.get(user_id, set())
+                history = user_history.get(user_id.item(), set())
                 recs = [item_id for item_id in item_ids if item_id not in history][:k]
-                user_recommendations[user_id] = recs
+                user_recommendations[user_id.item()] = recs
 
     return user_recommendations
