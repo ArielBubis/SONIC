@@ -188,9 +188,13 @@ def calc_bert4rec(
             precomputed_item_embeddings=item_embs,
             padding_idx=model_config['vocab_size'] - 1
         )
-        
+
+        print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
+        print(f"Expected hidden_size: {model.hidden_size}")  # If defined in BERT4Rec
+        print(f"Model output shape: {outputs.shape}")  # Should be (batch_size, seq_len, vocab_size)
+
         # Load state dict
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         model.to(device)
         
         # Generate recommendations using proper batching
