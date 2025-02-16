@@ -13,7 +13,8 @@ class BERT4Rec(nn.Module):
         add_head: bool = True,
         tie_weights: bool = True,
         padding_idx: int = -1,
-        init_std: float = 0.02
+        init_std: float = 0.02,
+        projection_dim: Optional[int] = None  # New parameter
     ):
         super().__init__()
 
@@ -25,21 +26,34 @@ class BERT4Rec(nn.Module):
         self.init_std = init_std
 
         if precomputed_item_embeddings is not None:
+            input_dim = precomputed_item_embeddings.shape[1]
+            hidden_dim = bert_config['hidden_size']
+            
+            # Create embedding layer from precomputed embeddings
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
             )
-            projection = nn.Linear(384, 256)
-            precomputed_item_embeddings = projection(precomputed_item_embeddings)
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
                 padding_idx=padding_idx
             )
+            
+            # Add projection layer if dimensions don't match
+            if input_dim != hidden_dim:
+                self.projection = nn.Sequential(
+                    nn.Linear(input_dim, projection_dim or hidden_dim),
+                    nn.ReLU(),
+                    nn.Linear(projection_dim or hidden_dim, hidden_dim) if projection_dim else nn.Identity()
+                )
+            else:
+                self.projection = nn.Identity()
         else:
             self.item_embeddings = nn.Embedding(
                 num_embeddings=vocab_size,
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
+            self.projection = nn.Identity()
 
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
@@ -49,7 +63,7 @@ class BERT4Rec(nn.Module):
                 vocab_size,
                 bias=False
             )
-            if self.tie_weights:
+            if self.tie_weights and precomputed_item_embeddings is None:
                 self.head.weight = nn.Parameter(self.item_embeddings.weight)
 
         if precomputed_item_embeddings is None:
@@ -62,6 +76,9 @@ class BERT4Rec(nn.Module):
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         embeds = self.item_embeddings(input_ids)
+        # Apply projection if dimensions need to be adjusted
+        embeds = self.projection(embeds)
+        
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
             attention_mask=attention_mask
