@@ -12,10 +12,6 @@ from rich.console import Console
 from rich.prompt import Prompt
 from typing import Optional, List
 
-import torch
-from . import CREAM
-from . import TAILS
-from . import ROUGE
 import os
 from ROUGE.bert4rec import (
     BERT4Rec, 
