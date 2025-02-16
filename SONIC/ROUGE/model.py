@@ -4,8 +4,6 @@ from transformers import BertModel, BertConfig
 from typing import Dict, Any, Optional
 import numpy as np
 
-# In SONIC/ROUGE/model.py
-
 class BERT4Rec(nn.Module):
     def __init__(
         self,
@@ -30,14 +28,12 @@ class BERT4Rec(nn.Module):
                 precomputed_item_embeddings.astype(np.float32)
             )
             input_dim = precomputed_item_embeddings.size(1)
-            projection = nn.Linear(input_dim, 256)
+            # Project to hidden_size from config
+            self.embedding_projection = nn.Linear(input_dim, bert_config['hidden_size'])
             
-            # Project embeddings
-            projected_embeddings = projection(precomputed_item_embeddings)
-            
-            # Create full embedding matrix with padding
-            full_embeddings = torch.zeros(vocab_size, 256)  # Initialize with zeros
-            full_embeddings[:len(precomputed_item_embeddings)] = projected_embeddings  # Copy projected embeddings
+            # Create full embedding matrix with zeros
+            full_embeddings = torch.zeros(vocab_size, input_dim)
+            full_embeddings[:len(precomputed_item_embeddings)] = precomputed_item_embeddings
             
             self.item_embeddings = nn.Embedding.from_pretrained(
                 full_embeddings,
@@ -49,6 +45,7 @@ class BERT4Rec(nn.Module):
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
+            self.embedding_projection = None
 
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
@@ -77,6 +74,9 @@ class BERT4Rec(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model."""
         embeds = self.item_embeddings(input_ids)
+        if self.embedding_projection is not None:
+            embeds = self.embedding_projection(embeds)
+            
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
             attention_mask=attention_mask
