@@ -208,33 +208,74 @@ def calc_bert4rec(
         if isinstance(k, int):
             k = [k]
             
+        # for current_k in k:
+        #     user_recommendations = {}
+            
+        #     for batch in tqdm(val_loader, desc=f'Generating recommendations for k={current_k}'):
+        #         input_ids = batch['input_ids'].to(device)
+        #         attention_mask = batch['attention_mask'].to(device)
+        #         user_ids = batch['user_id'].numpy()
+        #         histories = batch['full_history']
+        #         targets = batch['target'].numpy()
+                
+        #         with torch.no_grad():
+        #             outputs = model(input_ids, attention_mask)
+        #             scores = outputs[:, -1, :-2]  # Last position, exclude mask and pad tokens
+                    
+        #             # Get top-k items
+        #             _, top_items = torch.topk(scores, k=current_k, dim=-1)
+        #             top_items = top_items.cpu().numpy()
+                    
+        #             for user_id, history, recommendations in zip(user_ids, histories, top_items):
+        #                 filtered_recs = [
+        #                     item for item in recommendations 
+        #                     if item not in history
+        #                 ][:current_k]
+        #                 user_recommendations[user_id] = filtered_recs
+            
+        #     # Calculate metrics
+        #     df = dict_to_pandas(user_recommendations)
+        #     metrics_val = calc_metrics(val, df, current_k)
+        #     metrics_val = metrics_val.apply(mean_confidence_interval)
+        #     all_metrics_val.append(metrics_val)
+        #     if len(k) > 1:
+        #         metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+        #         metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
+
+        #     df = dict_to_pandas(metrics_val)
+
+        # if len(k) > 1:
+        #     metrics_val_concat = pd.concat(all_metrics_val, axis=0)
+        # else:
+        #     metrics_val_concat = all_metrics_val[0]
+
+        # metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+
+        # return metrics_val_concat
+        max_k = max(k) if isinstance(k, list) else k
+
+        # Pre-compute recommendations for all users up to max_k
+        user_recommendations_maxk = {}
+        for user_id in tqdm(all_users, desc=f'Generating BERT4Rec recommendations for {model_name}'):
+            history = user_history.get(user_id, set())
+            user_items = torch.LongTensor([list(history)]).to(device)
+            with torch.no_grad():
+                user_vector = model.item_embeddings(user_items).mean(dim=1).cpu().numpy()[0]
+            
+            scores = np.dot(item_embs, user_vector)
+            recommendations = np.argsort(scores)[::-1]
+            # Filter out history and take up to max_k
+            filtered_recommendations = [idx for idx in recommendations if idx not in history][:max_k]
+            user_recommendations_maxk[user_id] = filtered_recommendations
+
+        all_metrics_val = []
         for current_k in k:
             user_recommendations = {}
+            for user_id in all_users:
+                user_recommendations[user_id] = user_recommendations_maxk[user_id][:current_k]
             
-            for batch in tqdm(val_loader, desc=f'Generating recommendations for k={current_k}'):
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                user_ids = batch['user_id'].numpy()
-                histories = batch['full_history']
-                targets = batch['target'].numpy()
-                
-                with torch.no_grad():
-                    outputs = model(input_ids, attention_mask)
-                    scores = outputs[:, -1, :-2]  # Last position, exclude mask and pad tokens
-                    
-                    # Get top-k items
-                    _, top_items = torch.topk(scores, k=current_k, dim=-1)
-                    top_items = top_items.cpu().numpy()
-                    
-                    for user_id, history, recommendations in zip(user_ids, histories, top_items):
-                        filtered_recs = [
-                            item for item in recommendations 
-                            if item not in history
-                        ][:current_k]
-                        user_recommendations[user_id] = filtered_recs
-            
-            # Calculate metrics
             df = dict_to_pandas(user_recommendations)
+            
             metrics_val = calc_metrics(val, df, current_k)
             metrics_val = metrics_val.apply(mean_confidence_interval)
             
@@ -243,14 +284,14 @@ def calc_bert4rec(
                 metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
                 
             all_metrics_val.append(metrics_val)
-        
+
         if len(k) > 1:
             metrics_val_concat = pd.concat(all_metrics_val, axis=0)
         else:
             metrics_val_concat = all_metrics_val[0]
-            
+
         metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
-        
+
         return metrics_val_concat
 
     else:
