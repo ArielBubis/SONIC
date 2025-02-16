@@ -28,7 +28,10 @@ class BERT4Rec(nn.Module):
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
             )
-            projection = nn.Linear(384, 256)
+            # Determine input dimension from the embeddings
+            input_dim = precomputed_item_embeddings.size(1)
+            projection = nn.Linear(input_dim, 256)  # Project to fixed size
+            # projection = nn.Linear(384, 256)
             precomputed_item_embeddings = projection(precomputed_item_embeddings)
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
