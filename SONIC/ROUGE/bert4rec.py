@@ -149,6 +149,7 @@ def calc_bert4rec(
 ) -> pd.DataFrame:
     """Calculate metrics for BERT4Rec model"""
     run_name = f'{model_name}_{suffix}'
+    os.makedirs('metrics', exist_ok=True)
     train, val, user_history, ie = prepare_data(train, val, test, mode)
     
     # Load model checkpoint or create new model
@@ -296,7 +297,6 @@ def calc_bert4rec(
             
         df = dict_to_pandas(user_recommendations)
         
-        os.makedirs('metrics', exist_ok=True)
         metrics_val = calc_metrics(val, df, current_k)
         metrics_val = metrics_val.apply(mean_confidence_interval)
         
