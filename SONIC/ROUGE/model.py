@@ -16,6 +16,7 @@ class BERT4Rec(nn.Module):
         init_std: float = 0.02
     ):
         super().__init__()
+
         self.vocab_size = vocab_size
         self.bert_config = bert_config
         self.add_head = add_head
@@ -27,18 +28,11 @@ class BERT4Rec(nn.Module):
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
             )
-            input_dim = precomputed_item_embeddings.size(1)
-            # Project to hidden_size from config
-            self.embedding_projection = nn.Linear(input_dim, bert_config['hidden_size'])
-            
-            # Create full embedding matrix with zeros
-            full_embeddings = torch.zeros(vocab_size, bert_config['hidden_size'])  # Corrected shape
-            full_embeddings[:len(precomputed_item_embeddings)] = self.embedding_projection(precomputed_item_embeddings) #Project
-
+            projection = nn.Linear(384, 256)
+            precomputed_item_embeddings = projection(precomputed_item_embeddings)
             self.item_embeddings = nn.Embedding.from_pretrained(
-                full_embeddings,
-                padding_idx=padding_idx,
-                freeze=False  # Embeddings should be trainable
+                precomputed_item_embeddings,
+                padding_idx=padding_idx
             )
         else:
             self.item_embeddings = nn.Embedding(
@@ -46,7 +40,6 @@ class BERT4Rec(nn.Module):
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
-            self.embedding_projection = None
 
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
@@ -59,25 +52,16 @@ class BERT4Rec(nn.Module):
             if self.tie_weights:
                 self.head.weight = nn.Parameter(self.item_embeddings.weight)
 
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        """Initialize model weights."""
-        if not hasattr(self, 'item_embeddings_pretrained'):
+        if precomputed_item_embeddings is None:
             self.item_embeddings.weight.data.normal_(mean=0.0, std=self.init_std)
         if self.padding_idx is not None:
             self.item_embeddings.weight.data[self.padding_idx].zero_()
 
     def freeze_item_embs(self, flag: bool) -> None:
-        """Freeze or unfreeze item embeddings."""
         self.item_embeddings.weight.requires_grad = flag
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        """Forward pass of the model."""
         embeds = self.item_embeddings(input_ids)
-        if self.embedding_projection is not None:
-            embeds = self.embedding_projection(embeds)
-            
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
             attention_mask=attention_mask
