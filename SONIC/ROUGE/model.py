@@ -38,15 +38,23 @@ class BERT4Rec(nn.Module):
                 padding_idx=padding_idx
             )
             
-            # Add projection layer if dimensions don't match
+            # Create projection layers with intermediate dimension
             if input_dim != hidden_dim:
+                if projection_dim is None:
+                    projection_dim = (input_dim + hidden_dim) // 2
+                
+                print(f"Creating projection layers: {input_dim} -> {projection_dim} -> {hidden_dim}")
+                
                 self.projection = nn.Sequential(
-                    nn.Linear(input_dim, projection_dim or hidden_dim),
+                    nn.Linear(input_dim, projection_dim),
+                    nn.LayerNorm(projection_dim),
                     nn.ReLU(),
-                    nn.Linear(projection_dim or hidden_dim, hidden_dim) if projection_dim else nn.Identity()
+                    nn.Linear(projection_dim, hidden_dim),
+                    nn.LayerNorm(hidden_dim)
                 )
             else:
                 self.projection = nn.Identity()
+
         else:
             self.item_embeddings = nn.Embedding(
                 num_embeddings=vocab_size,
@@ -77,7 +85,17 @@ class BERT4Rec(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         embeds = self.item_embeddings(input_ids)
         # Apply projection if dimensions need to be adjusted
-        embeds = self.projection(embeds)
+        # Reshape for projection if needed
+        batch_size, seq_len, emb_dim = embeds.shape
+        
+        # Project embeddings to BERT hidden size
+        if not isinstance(self.projection, nn.Identity):
+            # Reshape to (batch_size * seq_len, emb_dim)
+            embeds = embeds.view(-1, emb_dim)
+            # Apply projection
+            embeds = self.projection(embeds)
+            # Reshape back to (batch_size, seq_len, hidden_dim)
+            embeds = embeds.view(batch_size, seq_len, -1)
         
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
