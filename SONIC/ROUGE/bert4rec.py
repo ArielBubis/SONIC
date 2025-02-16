@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
+import torch.nn as nn
 import torch
 from tqdm.auto import tqdm
 import os
@@ -181,6 +182,9 @@ def calc_bert4rec(
         # Get item embeddings
         item_embs = load_embeddings(model_name, train, ie)
         
+        model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
+        model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
+
         # Create model using original BERT4Rec class
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
@@ -188,6 +192,8 @@ def calc_bert4rec(
             precomputed_item_embeddings=item_embs,
             padding_idx=model_config['vocab_size'] - 3
         )
+        model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
+        model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
