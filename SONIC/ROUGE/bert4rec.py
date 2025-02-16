@@ -9,7 +9,6 @@ from .train import ModelTrainer, TrainingConfig
 from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
-
 def load_embeddings(model_name, train, ie):
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
@@ -78,14 +77,17 @@ def calc_bert4rec(
         item_embs = load_embeddings(model_name, train, ie)
         input_dim = item_embs.shape[1]
         
+        # Create model using exact checkpoint config
         model = BERT4Rec(
-            vocab_size=model_config['vocab_size'],
+            vocab_size=model_config['vocab_size'],  # Use checkpoint's vocab size
             bert_config=model_config,
-            precomputed_item_embeddings=item_embs,
+            precomputed_item_embeddings=item_embs,  # This will go through the hardcoded projection
             padding_idx=model_config['vocab_size'] - 1,
-            projection_dim=model_config['hidden_size']
+            add_head=True,
+            tie_weights=True,
+            init_std=0.02
         )
-        
+                
         # Load state dict
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
