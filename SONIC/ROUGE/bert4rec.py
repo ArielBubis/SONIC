@@ -186,7 +186,7 @@ def calc_bert4rec(
             vocab_size=model_config['vocab_size'],
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
-            padding_idx=model_config['vocab_size']
+            padding_idx=model_config['vocab_size'] - 2
         )
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
