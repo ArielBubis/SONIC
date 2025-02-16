@@ -45,8 +45,6 @@ def prepare_data(train, val, test, mode='val'):
     train['item_id'] = ie.fit_transform(train['track_id'])
     val['user_id'] = ue.fit_transform(val['user_id'])
     val['item_id'] = ie.fit_transform(val['track_id'])
-    test['user_id'] = ue.fit_transform(test['user_id'])
-    test['item_id'] = ie.fit_transform(test['track_id'])
 
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
