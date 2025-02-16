@@ -191,7 +191,7 @@ def calc_bert4rec(
             vocab_size=model_config['vocab_size'],
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
-            projection_dim=projection_dim,
+            projection_dim=256,
             padding_idx=model_config['vocab_size'] - 3
         )
         model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
