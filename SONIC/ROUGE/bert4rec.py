@@ -182,7 +182,6 @@ def calc_bert4rec(
         
         # Get item embeddings
         item_embs = load_embeddings(model_name, train, ie)
-        item_embs = load_embeddings(model_name, train, ie)
         input_dim = item_embs.shape[1]  # Original embedding dimension
         hidden_dim = model_config["hidden_size"]  # Target BERT dimension
         projection_dim = (input_dim + hidden_dim) // 2
