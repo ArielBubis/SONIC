@@ -190,8 +190,7 @@ def calc_bert4rec(
         )
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
-        print(f"Expected hidden_size: {model.hidden_size}")  # If defined in BERT4Rec
-        print(f"Model output shape: {outputs.shape}")  # Should be (batch_size, seq_len, vocab_size)
+        print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
 
         # Load state dict
         model.load_state_dict(checkpoint['model_state_dict'], strict=False)
@@ -214,6 +213,7 @@ def calc_bert4rec(
                 
                 with torch.no_grad():
                     outputs = model(input_ids, attention_mask)
+                    print(f"Model output shape: {outputs.shape}")  # Should be (batch_size, seq_len, vocab_size)
                     scores = outputs[:, -1, :-2]  # Last position, exclude mask and pad tokens
                     
                     # Get top-k items
