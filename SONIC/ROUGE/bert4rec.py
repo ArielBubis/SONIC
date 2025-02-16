@@ -184,8 +184,11 @@ def calc_bert4rec(
         item_embs = load_embeddings(model_name, train, ie)
         input_dim = item_embs.shape[1]  # Original embedding dimension
         hidden_dim = model_config["hidden_size"]  # Target BERT dimension
-        projection_dim = (input_dim + hidden_dim) // 2
-
+        projection_dim = input_dim
+        if(input_dim > hidden_dim):
+        # hidden_dim = model_config["hidden_size"]  # Target BERT dimension
+            projection_dim = (input_dim + hidden_dim) // 2
+        
         # Create model using original BERT4Rec class
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
