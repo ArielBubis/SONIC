@@ -14,15 +14,6 @@ from rich.prompt import Prompt
 from typing import Optional, List
 
 import os
-from ROUGE.bert4rec import (
-    BERT4Rec, 
-    BERT4RecTrainer, 
-    BERT4RecEvaluator,
-    TrainingConfig,
-    MaskedLMDataset,
-    PredictionDataset,
-    PaddingCollateFn
-)
 app = typer.Typer()
 console = Console()
 
