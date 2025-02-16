@@ -289,9 +289,10 @@ def calc_bert4rec(
         metrics_val = calc_metrics(val, df, current_k)
         metrics_val = metrics_val.apply(mean_confidence_interval)
         
+        metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
         if len(k) > 1:
             metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
-            metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
+
             
         all_metrics_val.append(metrics_val)
     
