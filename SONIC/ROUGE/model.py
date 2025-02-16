@@ -32,12 +32,13 @@ class BERT4Rec(nn.Module):
             self.embedding_projection = nn.Linear(input_dim, bert_config['hidden_size'])
             
             # Create full embedding matrix with zeros
-            full_embeddings = torch.zeros(vocab_size, input_dim)
-            full_embeddings[:len(precomputed_item_embeddings)] = precomputed_item_embeddings
-            
+            full_embeddings = torch.zeros(vocab_size, bert_config['hidden_size'])  # Corrected shape
+            full_embeddings[:len(precomputed_item_embeddings)] = self.embedding_projection(precomputed_item_embeddings) #Project
+
             self.item_embeddings = nn.Embedding.from_pretrained(
                 full_embeddings,
-                padding_idx=padding_idx
+                padding_idx=padding_idx,
+                freeze=False  # Embeddings should be trainable
             )
         else:
             self.item_embeddings = nn.Embedding(
