@@ -90,12 +90,12 @@ class BERT4Rec(nn.Module):
         
         # Project embeddings to BERT hidden size
         if not isinstance(self.projection, nn.Identity):
-            # Reshape to (batch_size * seq_len, emb_dim)
-            embeds = embeds.view(-1, emb_dim)
-            # Apply projection
-            embeds = self.projection(embeds)
-            # Reshape back to (batch_size, seq_len, hidden_dim)
-            embeds = embeds.view(batch_size, seq_len, -1)
+            batch_size, seq_len, emb_dim = embeds.shape
+            # Reshape and project
+            embeds = embeds.reshape(-1, emb_dim)  # Shape: [B*S, input_dim]
+            embeds = self.projection(embeds)  # Shape: [B*S, hidden_dim]
+            embeds = embeds.reshape(batch_size, seq_len, -1)  # Shape: [B, S, hidden_dim]
+
         
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
