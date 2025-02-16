@@ -85,17 +85,7 @@ class BERT4Rec(nn.Module):
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         embeds = self.item_embeddings(input_ids)
         # Apply projection if dimensions need to be adjusted
-        # Reshape for projection if needed
-        batch_size, seq_len, emb_dim = embeds.shape
-        
-        # Project embeddings to BERT hidden size
-        if not isinstance(self.projection, nn.Identity):
-            batch_size, seq_len, emb_dim = embeds.shape
-            # Reshape and project
-            embeds = embeds.reshape(-1, emb_dim)  # Shape: [B*S, input_dim]
-            embeds = self.projection(embeds)  # Shape: [B*S, hidden_dim]
-            embeds = embeds.reshape(batch_size, seq_len, -1)  # Shape: [B, S, hidden_dim]
-
+        embeds = self.projection(embeds)
         
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
