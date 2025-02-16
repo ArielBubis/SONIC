@@ -8,6 +8,8 @@ from .model import BERT4Rec
 from .train import ModelTrainer, TrainingConfig
 from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
+from torch.utils.data import DataLoader, Dataset
+from torch.nn.utils.rnn import pad_sequence
 
 def load_embeddings(model_name, train, ie):
     if 'mfcc' in model_name:
@@ -47,6 +49,93 @@ def prepare_data(train, val, test, mode='val'):
     return train, val, user_history, ie
 
 
+class LMDataset(Dataset):
+    def __init__(self, df, max_length=128, num_negatives=None, full_negative_sampling=True,
+                 user_col='user_id', item_col='item_id', time_col='timestamp'):
+        self.max_length = max_length
+        self.num_negatives = num_negatives
+        self.full_negative_sampling = full_negative_sampling
+        self.user_col = user_col
+        self.item_col = item_col
+        self.time_col = time_col
+
+        self.data = df.sort_values(time_col).groupby(user_col)[item_col].agg(list).to_dict()
+        self.user_ids = list(self.data.keys())
+
+        if num_negatives:
+            self.all_items = df[item_col].unique()
+
+    def __len__(self):
+        return len(self.data)
+
+    def sample_negatives(self, item_sequence):
+        negatives = np.array(list(set(self.all_items) - set(item_sequence)))
+        if self.full_negative_sampling:
+            negatives = np.random.choice(
+                negatives, size=self.num_negatives * (len(item_sequence) - 1), replace=True)
+            negatives = negatives.reshape(len(item_sequence) - 1, self.num_negatives)
+        else:
+            negatives = np.random.choice(negatives, size=self.num_negatives, replace=False)
+        return negatives
+
+class MaskedLMPredictionDataset(LMDataset):
+    def __init__(self, df, max_length=128, masking_value=1,
+                 validation_mode=False,
+                 user_col='user_id', item_col='item_id',
+                 time_col='timestamp'):
+        super().__init__(df, max_length=max_length, num_negatives=None,
+                         user_col=user_col, item_col=item_col, time_col=time_col)
+        self.masking_value = masking_value
+        self.validation_mode = validation_mode
+
+    def __getitem__(self, idx):
+        user_id = self.user_ids[idx]
+        item_sequence = self.data[user_id]
+
+        if self.validation_mode:
+            target = item_sequence[-1]
+            input_ids = item_sequence[-self.max_length:-1]
+            item_sequence = item_sequence[:-1]
+        else:
+            input_ids = item_sequence[-self.max_length + 1:]
+
+        input_ids += [self.masking_value]
+
+        if self.validation_mode:
+            return {'input_ids': input_ids, 'user_id': user_id,
+                    'full_history': item_sequence, 'target': target}
+        else:
+            return {'input_ids': input_ids, 'user_id': user_id,
+                    'full_history': item_sequence}
+
+class PaddingCollateFn:
+    def __init__(self, padding_value=0, labels_padding_value=-100):
+        self.padding_value = padding_value
+        self.labels_padding_value = labels_padding_value
+
+    def __call__(self, batch):
+        collated_batch = {}
+
+        for key in batch[0].keys():
+            if np.isscalar(batch[0][key]):
+                collated_batch[key] = torch.stack([torch.tensor(example[key]) for example in batch])
+                continue
+
+            if key == 'labels':
+                padding_value = self.labels_padding_value
+            else:
+                padding_value = self.padding_value
+
+            values = [torch.tensor(example[key]) for example in batch]
+            collated_batch[key] = pad_sequence(values, batch_first=True,
+                                             padding_value=padding_value)
+
+        if 'input_ids' in collated_batch:
+            attention_mask = collated_batch['input_ids'] != self.padding_value
+            collated_batch['attention_mask'] = attention_mask.to(dtype=torch.float32)
+
+        return collated_batch
+
 def calc_bert4rec(
     model_name: str,
     train: pd.DataFrame,
@@ -69,32 +158,93 @@ def calc_bert4rec(
             raise FileNotFoundError(f"Checkpoint not found at {pretrained_path}")
         
         checkpoint = torch.load(pretrained_path, map_location=device)
-        
-        # Create model with projection layer matching checkpoint
         model_config = checkpoint['config']
         
-        # Get item embeddings to determine input dimension
-        item_embs = load_embeddings(model_name, train, ie)
-        input_dim = item_embs.shape[1]
-        
-        # Create model using exact checkpoint config
-        model = BERT4Rec(
-            vocab_size=model_config['vocab_size'],  # Use checkpoint's vocab size
-            bert_config=model_config,
-            precomputed_item_embeddings=item_embs,  # This will go through the hardcoded projection
-            padding_idx=model_config['vocab_size'] - 1,
-            add_head=True,
-            tie_weights=True,
-            init_std=0.02
+        # Create prediction dataset using the original implementation
+        val_dataset = MaskedLMPredictionDataset(
+            val,
+            max_length=128,
+            masking_value=model_config['vocab_size'] - 2,  # Second to last token for mask
+            validation_mode=True
         )
-                
+        
+        # Create dataloader with the original collate function
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=32,
+            shuffle=False,
+            collate_fn=PaddingCollateFn(
+                padding_value=model_config['vocab_size'] - 1  # Last token for padding
+            )
+        )
+        
+        # Get item embeddings
+        item_embs = load_embeddings(model_name, train, ie)
+        
+        # Create model using original BERT4Rec class
+        model = BERT4Rec(
+            vocab_size=model_config['vocab_size'],
+            bert_config=model_config,
+            precomputed_item_embeddings=item_embs,
+            padding_idx=model_config['vocab_size'] - 1
+        )
+        
         # Load state dict
         model.load_state_dict(checkpoint['model_state_dict'])
-    else:
-        # Get embeddings for new model
-        item_embs = load_embeddings(model_name, train, ie)
+        model.to(device)
         
-        # Initialize new model
+        # Generate recommendations using proper batching
+        all_metrics_val = []
+        if isinstance(k, int):
+            k = [k]
+            
+        for current_k in k:
+            user_recommendations = {}
+            
+            for batch in tqdm(val_loader, desc=f'Generating recommendations for k={current_k}'):
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                user_ids = batch['user_id'].numpy()
+                histories = batch['full_history']
+                targets = batch['target'].numpy()
+                
+                with torch.no_grad():
+                    outputs = model(input_ids, attention_mask)
+                    scores = outputs[:, -1, :-2]  # Last position, exclude mask and pad tokens
+                    
+                    # Get top-k items
+                    _, top_items = torch.topk(scores, k=current_k, dim=-1)
+                    top_items = top_items.cpu().numpy()
+                    
+                    for user_id, history, recommendations in zip(user_ids, histories, top_items):
+                        filtered_recs = [
+                            item for item in recommendations 
+                            if item not in history
+                        ][:current_k]
+                        user_recommendations[user_id] = filtered_recs
+            
+            # Calculate metrics
+            df = dict_to_pandas(user_recommendations)
+            metrics_val = calc_metrics(val, df, current_k)
+            metrics_val = metrics_val.apply(mean_confidence_interval)
+            
+            if len(k) > 1:
+                metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+                metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
+                
+            all_metrics_val.append(metrics_val)
+        
+        if len(k) > 1:
+            metrics_val_concat = pd.concat(all_metrics_val, axis=0)
+        else:
+            metrics_val_concat = all_metrics_val[0]
+            
+        metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+        
+        return metrics_val_concat
+
+    else:
+        # Original initialization code for new models...
         model_config = {
             'vocab_size': len(train['item_id'].unique()),
             'max_position_embeddings': 200,
@@ -103,6 +253,8 @@ def calc_bert4rec(
             'num_attention_heads': 4,
             'intermediate_size': 1024
         }
+        
+        item_embs = load_embeddings(model_name, train, ie)
         
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
