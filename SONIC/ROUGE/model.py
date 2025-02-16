@@ -4,8 +4,9 @@ from transformers import BertModel, BertConfig
 from typing import Dict, Any, Optional
 import numpy as np
 
+# In SONIC/ROUGE/model.py
+
 class BERT4Rec(nn.Module):
-    """BERT-based model for sequential recommendation."""
     def __init__(
         self,
         vocab_size: int,
@@ -28,12 +29,13 @@ class BERT4Rec(nn.Module):
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
             )
-            # Determine input dimension from the embeddings
             input_dim = precomputed_item_embeddings.size(1)
-            projection = nn.Linear(input_dim, 256)  
-            # projection = nn.Linear(384, 256)
+            projection = nn.Linear(input_dim, 256)
+            
+            # Project embeddings
             projected_embeddings = projection(precomputed_item_embeddings)
             
+            # Create full embedding matrix with padding
             full_embeddings = torch.zeros(vocab_size, 256)  # Initialize with zeros
             full_embeddings[:len(precomputed_item_embeddings)] = projected_embeddings  # Copy projected embeddings
             
