@@ -80,7 +80,7 @@ class LMDataset(Dataset):
         return negatives
 
 class MaskedLMPredictionDataset(LMDataset):
-    def __init__(self, df, max_length=128, masking_value=1,
+    def __init__(self, df, max_length=1280, masking_value=1,
                  validation_mode=False,
                  user_col='user_id', item_col='item_id',
                  time_col='timestamp'):
@@ -165,7 +165,7 @@ def calc_bert4rec(
         # Create prediction dataset using the original implementation
         val_dataset = MaskedLMPredictionDataset(
             val,
-            max_length=128,
+            max_length=1280,
             masking_value=model_config['vocab_size'] - 2,  # Second to last token for mask
             validation_mode=True
         )
@@ -186,6 +186,7 @@ def calc_bert4rec(
 
         # Ensure vocabulary size matches checkpoint
         checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
+        
         if item_embs.shape[0] != checkpoint_vocab_size - 3:  # Account for special tokens
             # Pad item embeddings if needed
             pad_rows = checkpoint_vocab_size - 3 - item_embs.shape[0]
@@ -206,7 +207,7 @@ def calc_bert4rec(
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
 
-        
+
         # Print configuration for debugging
         print(f"Checkpoint vocab size: {checkpoint_vocab_size}")
         print(f"Model vocab size: {model_config['vocab_size']}")
