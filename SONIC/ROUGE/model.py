@@ -7,16 +7,17 @@ import logging
 
 class BERT4Rec(nn.Module):
     def __init__(
-        self,
-        vocab_size: int,
-        bert_config: Dict[str, Any],
-        precomputed_item_embeddings: Optional[np.ndarray] = None,
-        add_head: bool = True,
-        tie_weights: bool = True,
-        padding_idx: int = -1,
-        init_std: float = 0.02,
-        projection_dim: Optional[int] = None
-    ):
+    self,
+    vocab_size: int,
+    bert_config: Dict[str, Any],
+    precomputed_item_embeddings: Optional[np.ndarray] = None,
+    add_head: bool = True,
+    tie_weights: bool = True,
+    padding_idx: int = -1,
+    init_std: float = 0.02,
+    projection_dim: Optional[int] = None,
+    projection_strategy: str = 'linear'  # New parameter
+):
         """
         Initialize BERT4Rec model.
         
@@ -41,7 +42,11 @@ class BERT4Rec(nn.Module):
         self.init_std = init_std
         
         # Set up embedding and projection layers
-        self._setup_embeddings(precomputed_item_embeddings, projection_dim)
+        self._setup_embeddings(
+        precomputed_item_embeddings, 
+        projection_dim,
+        projection_strategy
+    )
         
         # Initialize BERT transformer
         self.transformer_model = BertModel(BertConfig(**bert_config))
@@ -78,31 +83,38 @@ class BERT4Rec(nn.Module):
                 )
 
     def _setup_embeddings(
-        self,
-        precomputed_item_embeddings: Optional[np.ndarray],
-        projection_dim: Optional[int]
+    self,
+    precomputed_item_embeddings: Optional[np.ndarray],
+    projection_dim: Optional[int],
+    projection_strategy: str = 'linear'  # New parameter
     ) -> None:
-        """Set up embedding and projection layers."""
         if precomputed_item_embeddings is not None:
             input_dim = precomputed_item_embeddings.shape[1]
             hidden_dim = self.bert_config['hidden_size']
             
-            # Create embedding layer from precomputed embeddings
             self.item_embeddings = nn.Embedding.from_pretrained(
                 torch.from_numpy(precomputed_item_embeddings.astype(np.float32)),
                 padding_idx=self.padding_idx
             )
             
-            # Set up projection if dimensions don't match
             if input_dim != hidden_dim:
-                if projection_dim is None:
-                    projection_dim = (input_dim + hidden_dim) // 2
+                if projection_strategy == 'linear':
+                    self.projection = self._create_projection_layers(
+                        input_dim, hidden_dim, hidden_dim, num_layers=1
+                    )
+                elif projection_strategy == 'progressive':
+                    if projection_dim is None:
+                        projection_dim = (input_dim + hidden_dim) // 2
+                    self.projection = self._create_projection_layers(
+                        input_dim, projection_dim, hidden_dim, num_layers=2
+                    )
+                elif projection_strategy == 'deep':
+                    self.projection = self._create_projection_layers(
+                        input_dim, projection_dim, hidden_dim, num_layers=3
+                    )
                 
-                self.projection = self._create_projection_layers(
-                    input_dim, projection_dim, hidden_dim
-                )
                 logging.info(
-                    f"Created projection layers: {input_dim} -> {projection_dim} -> {hidden_dim}"
+                    f"Created {projection_strategy} projection: {input_dim} -> {hidden_dim}"
                 )
             else:
                 self.projection = nn.Identity()
@@ -119,15 +131,27 @@ class BERT4Rec(nn.Module):
         self,
         input_dim: int,
         projection_dim: int,
-        hidden_dim: int
+        hidden_dim: int,
+        num_layers: int = 2  # New parameter
     ) -> nn.Sequential:
-        """Create projection layers with the specified dimensions."""
-        return nn.Sequential(
-            nn.Linear(input_dim, projection_dim),
-            nn.ReLU(),
-            nn.Linear(projection_dim, hidden_dim),
-            nn.LayerNorm(hidden_dim)
-        )
+        """Create projection layers with specified dimensions and depth."""
+        if num_layers == 1:
+            return nn.Sequential(
+                nn.Linear(input_dim, hidden_dim),
+                nn.LayerNorm(hidden_dim)
+            )
+            
+        layers = []
+        dims = np.linspace(input_dim, hidden_dim, num_layers + 1).astype(int)
+        
+        for i in range(num_layers):
+            layers.extend([
+                nn.Linear(dims[i], dims[i + 1]),
+                nn.LayerNorm(dims[i + 1]),
+                nn.ReLU() if i < num_layers - 1 else nn.Identity()
+            ])
+        
+        return nn.Sequential(*layers)
 
     def _setup_output_head(self) -> None:
         """Set up the output head layer."""

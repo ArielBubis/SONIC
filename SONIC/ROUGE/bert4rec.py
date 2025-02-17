@@ -188,14 +188,14 @@ def calc_bert4rec(
         if(input_dim > hidden_dim):
         # hidden_dim = model_config["hidden_size"]  # Target BERT dimension
             projection_dim = (input_dim + hidden_dim) // 2
-        
+        vocab_size = model_config["vocab_size"]
         # Create model using original BERT4Rec class
         model = BERT4Rec(
-            vocab_size=model_config['vocab_size'],
+            vocab_size= vocab_size,
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
-            projection_dim=projection_dim,
-            padding_idx=model_config['vocab_size'] - 3
+            projection_strategy='progressive',  # or 'linear' or 'deep'
+            projection_dim=256  # optional intermediate dimension
         )
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
