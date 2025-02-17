@@ -11,6 +11,7 @@ from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
 
 def load_embeddings(model_name, train, ie):
     if 'mfcc' in model_name:
@@ -160,7 +161,8 @@ def calc_bert4rec(
         
         checkpoint = torch.load(pretrained_path, map_location=device)
         model_config = checkpoint['config']
-        
+        # Add a linear layer to project the input embeddings to the correct dimension
+
         # Create prediction dataset using the original implementation
         val_dataset = MaskedLMPredictionDataset(
             val,
@@ -182,6 +184,9 @@ def calc_bert4rec(
         # Get item embeddings
         item_embs = load_embeddings(model_name, val, ie)
         input_dim = item_embs.shape[1]  # Get actual input dimension
+
+        projection_layer = nn.Linear(input_dim, model_config['hidden_size'])
+        projected_item_embs = F.linear(torch.tensor(item_embs, dtype=torch.float32), projection_layer.weight, projection_layer.bias).detach().numpy()
 
         # Ensure vocabulary size matches checkpoint
         checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
@@ -232,7 +237,7 @@ def calc_bert4rec(
         for current_k in k:
             user_recommendations = generate_recommendations(
                 model=model,
-                pred_loader=pred_loader,
+                pred_loader=val_loader,
                 user_history=user_history,
                 device=device,
                 k=max(k)  # Use maximum k value if k is a list
