@@ -24,12 +24,38 @@ class BERT4Rec(nn.Module):
         self.padding_idx = padding_idx
         self.init_std = init_std
 
+        # if precomputed_item_embeddings is not None:
+        #     precomputed_item_embeddings = torch.from_numpy(
+        #         precomputed_item_embeddings.astype(np.float32)
+        #     )
+        #     projection = nn.Linear(384, 256)
+        #     precomputed_item_embeddings = projection(precomputed_item_embeddings)
+        #     self.item_embeddings = nn.Embedding.from_pretrained(
+        #         precomputed_item_embeddings,
+        #         padding_idx=padding_idx
+        #     )
+        # else:
+        #     self.item_embeddings = nn.Embedding(
+        #         num_embeddings=vocab_size,
+        #         embedding_dim=bert_config['hidden_size'],
+        #         padding_idx=padding_idx
+        #     )
         if precomputed_item_embeddings is not None:
-            precomputed_item_embeddings = torch.from_numpy(
-                precomputed_item_embeddings.astype(np.float32)
-            )
-            projection = nn.Linear(384, 256)
-            precomputed_item_embeddings = projection(precomputed_item_embeddings)
+            input_dim = precomputed_item_embeddings.shape[1]
+            hidden_size = bert_config['hidden_size']
+            
+            # Create projection layer if dimensions don't match
+            if input_dim != hidden_size:
+                self.embedding_projection = nn.Linear(input_dim, hidden_size)
+                precomputed_item_embeddings = torch.from_numpy(
+                    precomputed_item_embeddings.astype(np.float32)
+                )
+                precomputed_item_embeddings = self.embedding_projection(precomputed_item_embeddings)
+            else:
+                precomputed_item_embeddings = torch.from_numpy(
+                    precomputed_item_embeddings.astype(np.float32)
+                )
+            
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
                 padding_idx=padding_idx
@@ -40,7 +66,6 @@ class BERT4Rec(nn.Module):
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
-
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
         if self.add_head:
