@@ -154,24 +154,6 @@ def calc_bert4rec(
     
     # Load model checkpoint or create new model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # Create prediction dataset using the original implementation
-    val_dataset = MaskedLMPredictionDataset(
-        val,
-        max_length=128,
-        masking_value=model_config['vocab_size'] - 2,  # Second to last token for mask
-        validation_mode=True
-    )
-    
-    # Create dataloader with the original collate function
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=32,
-        shuffle=False,
-        collate_fn=PaddingCollateFn(
-            padding_value=model_config['vocab_size'] - 1  # Last token for padding
-        )
-    )
-
     if pretrained_path:
         if not os.path.exists(pretrained_path):
             raise FileNotFoundError(f"Checkpoint not found at {pretrained_path}")
@@ -179,9 +161,26 @@ def calc_bert4rec(
         checkpoint = torch.load(pretrained_path, map_location=device)
         model_config = checkpoint['config']
         
+                # Create prediction dataset using the original implementation
+        val_dataset = MaskedLMPredictionDataset(
+            val,
+            max_length=128,
+            masking_value=model_config['vocab_size'] - 2,  # Second to last token for mask
+            validation_mode=True
+        )
         
+        # Create dataloader with the original collate function
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=32,
+            shuffle=False,
+            collate_fn=PaddingCollateFn(
+                padding_value=model_config['vocab_size'] - 1  # Last token for padding
+            )
+        )
+
         # Get item embeddings
-        item_embs = load_embeddings(model_name, train, ie)
+        item_embs = load_embeddings(model_name, val_dataset, ie)
         input_dim = item_embs.shape[1]  # Get actual input dimension
 
         # Ensure vocabulary size matches checkpoint
