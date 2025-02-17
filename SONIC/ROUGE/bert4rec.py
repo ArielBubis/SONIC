@@ -180,50 +180,46 @@ def calc_bert4rec(
             )
         )
         
+        hidden_dim = model_config["hidden_size"]  # Target BERT dimension
+        vocab_size = model_config["vocab_size"]
         # Get item embeddings
-        item_embs = load_embeddings(model_name, train, ie)
-        input_dim = item_embs.shape[1]  # Get actual input dimension
-
-        # Ensure vocabulary size matches checkpoint
-        checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
-        if item_embs.shape[0] != checkpoint_vocab_size - 3:  # Account for special tokens
-            # Pad item embeddings if needed
-            pad_rows = checkpoint_vocab_size - 3 - item_embs.shape[0]
-            if pad_rows > 0:
-                padding = np.zeros((pad_rows, item_embs.shape[1]))
-                item_embs = np.vstack([item_embs, padding])
-
-        model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
-        model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
-
+        item_embs = load_embeddings(model_name, val, ie)
+        input_dim = item_embs.shape[1]  # Original embedding dimension
+        # projection_dim = input_dim
+        # if(input_dim > hidden_dim):
+        # # hidden_dim = model_config["hidden_size"]  # Target BERT dimension
+        #     projection_dim = (input_dim + hidden_dim) // 2
         # Create model using original BERT4Rec class
+        if item_embs.shape[0] < vocab_size:
+            padding = np.zeros((vocab_size - item_embs.shape[0], item_embs.shape[1]))
+            item_embs = np.vstack([item_embs, padding])
+        elif item_embs.shape[0] > vocab_size:
+            item_embs = item_embs[:vocab_size]
+        # model = BERT4Rec(
+        #     vocab_size= vocab_size,
+        #     bert_config=model_config,
+        #     precomputed_item_embeddings=item_embs,
+        #     projection_strategy='progressive',  # or 'linear' or 'deep'
+        #     projection_dim=256  # optional intermediate dimension
+        # )
         model = BERT4Rec(
-            vocab_size=model_config['vocab_size'],
+            vocab_size=vocab_size,  # Use checkpoint's vocab size
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
-            padding_idx=model_config['vocab_size'] - 3
+            projection_strategy='progressive',
+            projection_dim=(input_dim + hidden_dim) // 2  # Calculate intermediate dim
         )
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
-
-        
-        # Print configuration for debugging
-        print(f"Checkpoint vocab size: {checkpoint_vocab_size}")
-        print(f"Model vocab size: {model_config['vocab_size']}")
-        print(f"Input embedding dim: {input_dim}")
-        print(f"Model hidden size: {model_config['hidden_size']}")
+        model_config['vocab_size'] = len(train['item_id'].unique()) + 3  # Add special tokens
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
 
         # Load state dict
-        # model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        # model.to(device)
-        incompatible_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        print(f"Loaded checkpoint with following incompatible keys: {incompatible_keys}")
-        
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
         model.to(device)
-
+        
         # Generate recommendations using proper batching
         all_metrics_val = []
         if isinstance(k, int):
@@ -265,67 +261,67 @@ def calc_bert4rec(
 
 
     else:
-        # # Original initialization code for new models...
-        # model_config = {
-        #     'vocab_size': len(train['item_id'].unique()),
-        #     'max_position_embeddings': 200,
-        #     'hidden_size': 256,
-        #     'num_hidden_layers': 2,
-        #     'num_attention_heads': 4,
-        #     'intermediate_size': 1024
-        # }
+        # Original initialization code for new models...
+        model_config = {
+            'vocab_size': len(train['item_id'].unique()),
+            'max_position_embeddings': 200,
+            'hidden_size': 256,
+            'num_hidden_layers': 2,
+            'num_attention_heads': 4,
+            'intermediate_size': 1024
+        }
         
-        # item_embs = load_embeddings(model_name, train, ie)
+        item_embs = load_embeddings(model_name, train, ie)
         
-        # model = BERT4Rec(
-        #     vocab_size=model_config['vocab_size'],
-        #     bert_config=model_config,
-        #     precomputed_item_embeddings=item_embs,
-        #     padding_idx=model_config['vocab_size'] - 1
-        # )
+        model = BERT4Rec(
+            vocab_size=model_config['vocab_size'],
+            bert_config=model_config,
+            precomputed_item_embeddings=item_embs,
+            padding_idx=model_config['vocab_size'] - 1
+        )
     
-        # model.to(device)
-        
-        # all_users = val.user_id.unique()
-        # if isinstance(k, int):
-        #     k = [k]
+    # model.to(device)
+    
+    # all_users = val.user_id.unique()
+    # if isinstance(k, int):
+    #     k = [k]
 
-        # all_metrics_val = []
+    # all_metrics_val = []
+    
+    # for current_k in k:
+    #     user_recommendations = {}
+    #     for user_id in tqdm(all_users, desc=f'applying BERT4Rec for {model_name} with k={current_k}'):
+    #         history = user_history.get(user_id, set())
+    #         user_items = torch.LongTensor([list(history)]).to(device)
+    #         with torch.no_grad():
+    #             user_vector = model.item_embeddings(user_items).mean(dim=1).cpu().numpy()[0]
+            
+    #         scores = np.dot(item_embs, user_vector)
+    #         recommendations = np.argsort(scores)[::-1]
+    #         filtered_recommendations = [idx for idx in recommendations if idx not in history][:current_k]
+    #         user_recommendations[user_id] = filtered_recommendations
+            
+    #     df = dict_to_pandas(user_recommendations)
         
-        # for current_k in k:
-        #     user_recommendations = {}
-        #     for user_id in tqdm(all_users, desc=f'applying BERT4Rec for {model_name} with k={current_k}'):
-        #         history = user_history.get(user_id, set())
-        #         user_items = torch.LongTensor([list(history)]).to(device)
-        #         with torch.no_grad():
-        #             user_vector = model.item_embeddings(user_items).mean(dim=1).cpu().numpy()[0]
-                
-        #         scores = np.dot(item_embs, user_vector)
-        #         recommendations = np.argsort(scores)[::-1]
-        #         filtered_recommendations = [idx for idx in recommendations if idx not in history][:current_k]
-        #         user_recommendations[user_id] = filtered_recommendations
-                
-        #     df = dict_to_pandas(user_recommendations)
-            
-        #     metrics_val = calc_metrics(val, df, current_k)
-        #     metrics_val = metrics_val.apply(mean_confidence_interval)
-            
-        #     metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
-        #     if len(k) > 1:
-        #         metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+    #     metrics_val = calc_metrics(val, df, current_k)
+    #     metrics_val = metrics_val.apply(mean_confidence_interval)
 
-                
-        #     all_metrics_val.append(metrics_val)
-        
-        # if len(k) > 1:
-        #     metrics_val_concat = pd.concat(all_metrics_val, axis=0)
-        # else:
-        #     metrics_val_concat = all_metrics_val[0]
+    #     metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
+    #     if len(k) > 1:
+    #         metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
+
             
-        # metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+    #     all_metrics_val.append(metrics_val)
+    
+    # if len(k) > 1:
+    #     metrics_val_concat = pd.concat(all_metrics_val, axis=0)
+    # else:
+    #     metrics_val_concat = all_metrics_val[0]
         
-        # return metrics_val_concat
-        raise NotImplementedError("Pretrained model path is required for evaluation.")
+    # metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+    
+    # return metrics_val_concat
+
 def bert4rec(
     model_names: str | list,
     suffix: str,
