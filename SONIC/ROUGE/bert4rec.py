@@ -193,16 +193,20 @@ def calc_bert4rec(
             precomputed_item_embeddings=item_embs,
             padding_idx=model_config['vocab_size'] - 3
         )
-        model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
-        model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
+        # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
+        # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
 
         # Load state dict
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        model.to(device)
+        # model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        # model.to(device)
+        incompatible_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        print(f"Loaded checkpoint with following incompatible keys: {incompatible_keys}")
         
+        model.to(device)
+
         # Generate recommendations using proper batching
         all_metrics_val = []
         if isinstance(k, int):
@@ -230,7 +234,7 @@ def calc_bert4rec(
             if len(k) > 1:
                 metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
                 metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
-            
+
             df = dict_to_pandas(metrics_val)
 
         if len(k) > 1:
