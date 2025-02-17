@@ -118,7 +118,7 @@ class BERT4Rec(nn.Module):
 
         if self.add_head:
             outputs = self.head(outputs)
-            print(f"Applied head in forward pass")
+            # print(f"Applied head in forward pass")
 
         return outputs
 
