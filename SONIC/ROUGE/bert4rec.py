@@ -204,7 +204,7 @@ def calc_bert4rec(
         model = BERT4Rec(
             vocab_size=model_config['vocab_size'],
             bert_config=model_config,
-            precomputed_item_embeddings=item_embs,
+            precomputed_item_embeddings=projected_item_embs,
             padding_idx=model_config['vocab_size'] - 3
         )
         
