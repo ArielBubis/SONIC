@@ -25,6 +25,7 @@ class BERT4Rec(nn.Module):
         self.init_std = init_std
 
         # Initialize BERT model first
+        bert_config['vocab_size'] = vocab_size  # Ensure BERT config matches vocab size
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
         if precomputed_item_embeddings is not None:
@@ -34,20 +35,31 @@ class BERT4Rec(nn.Module):
             # Create projection layer if dimensions don't match
             if input_dim != hidden_size:
                 self.embedding_projection = nn.Linear(input_dim, hidden_size)
-                precomputed_item_embeddings = torch.from_numpy(
+                precomputed_embeddings = torch.from_numpy(
                     precomputed_item_embeddings.astype(np.float32)
                 )
                 with torch.no_grad():
-                    precomputed_item_embeddings = self.embedding_projection(precomputed_item_embeddings)
+                    precomputed_embeddings = self.embedding_projection(precomputed_embeddings)
+            else:
+                precomputed_embeddings = torch.from_numpy(
+                    precomputed_item_embeddings.astype(np.float32)
+                )
+            
+            # Pad embeddings if needed
+            if precomputed_embeddings.shape[0] < vocab_size:
+                padding = torch.zeros(
+                    vocab_size - precomputed_embeddings.shape[0], 
+                    hidden_size,
+                    dtype=precomputed_embeddings.dtype
+                )
+                precomputed_embeddings = torch.cat([precomputed_embeddings, padding], dim=0)
             
             # Initialize embeddings with precomputed values
             self.item_embeddings = nn.Embedding.from_pretrained(
-                precomputed_item_embeddings,
-                padding_idx=padding_idx
+                precomputed_embeddings,
+                padding_idx=padding_idx,
+                freeze=False
             )
-            
-            # Resize BERT embeddings to match vocabulary size
-            self.transformer_model.resize_token_embeddings(vocab_size)
             
             # Copy item embeddings to BERT embeddings
             with torch.no_grad():
@@ -60,18 +72,22 @@ class BERT4Rec(nn.Module):
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
-            # Resize BERT embeddings
-            self.transformer_model.resize_token_embeddings(vocab_size)
+            # Copy embeddings to BERT
+            with torch.no_grad():
+                self.transformer_model.embeddings.word_embeddings.weight.copy_(
+                    self.item_embeddings.weight
+                )
 
         if self.add_head:
             self.head = nn.Linear(
                 bert_config['hidden_size'],
                 vocab_size,
-                bias=False
+                bias=True  # Changed to match BERT's output layer
             )
             if self.tie_weights:
-                self.head.weight = nn.Parameter(self.item_embeddings.weight)
+                self.head.weight = self.item_embeddings.weight
 
+        # Initialize or zero padding token
         if precomputed_item_embeddings is None:
             self.item_embeddings.weight.data.normal_(mean=0.0, std=self.init_std)
         if self.padding_idx is not None:
