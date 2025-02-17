@@ -208,7 +208,7 @@ def calc_bert4rec(
         if isinstance(k, int):
             k = [k]
         item_count = train.item_id.nunique() + 2
-        pred_dataset = MaskedLMPredictionDataset(train, masking_value=item_count-2, max_length=50, validation_mode=False)
+        pred_dataset = MaskedLMPredictionDataset(val, masking_value=item_count-2, max_length=50, validation_mode=False)
 
         pred_loader = DataLoader(pred_dataset, batch_size=32,
                                 shuffle=False, num_workers=os.cpu_count() // 2,
@@ -244,67 +244,8 @@ def calc_bert4rec(
 
 
     else:
-        # # Original initialization code for new models...
-        # model_config = {
-        #     'vocab_size': len(train['item_id'].unique()),
-        #     'max_position_embeddings': 200,
-        #     'hidden_size': 256,
-        #     'num_hidden_layers': 2,
-        #     'num_attention_heads': 4,
-        #     'intermediate_size': 1024
-        # }
-        
-        # item_embs = load_embeddings(model_name, train, ie)
-        
-        # model = BERT4Rec(
-        #     vocab_size=model_config['vocab_size'],
-        #     bert_config=model_config,
-        #     precomputed_item_embeddings=item_embs,
-        #     padding_idx=model_config['vocab_size'] - 1
-        # )
-    
-        # model.to(device)
-        
-        # all_users = val.user_id.unique()
-        # if isinstance(k, int):
-        #     k = [k]
-
-        # all_metrics_val = []
-        
-        # for current_k in k:
-        #     user_recommendations = {}
-        #     for user_id in tqdm(all_users, desc=f'applying BERT4Rec for {model_name} with k={current_k}'):
-        #         history = user_history.get(user_id, set())
-        #         user_items = torch.LongTensor([list(history)]).to(device)
-        #         with torch.no_grad():
-        #             user_vector = model.item_embeddings(user_items).mean(dim=1).cpu().numpy()[0]
-                
-        #         scores = np.dot(item_embs, user_vector)
-        #         recommendations = np.argsort(scores)[::-1]
-        #         filtered_recommendations = [idx for idx in recommendations if idx not in history][:current_k]
-        #         user_recommendations[user_id] = filtered_recommendations
-                
-        #     df = dict_to_pandas(user_recommendations)
-            
-        #     metrics_val = calc_metrics(val, df, current_k)
-        #     metrics_val = metrics_val.apply(mean_confidence_interval)
-            
-        #     metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
-        #     if len(k) > 1:
-        #         metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
-
-                
-        #     all_metrics_val.append(metrics_val)
-        
-        # if len(k) > 1:
-        #     metrics_val_concat = pd.concat(all_metrics_val, axis=0)
-        # else:
-        #     metrics_val_concat = all_metrics_val[0]
-            
-        # metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
-        
-        # return metrics_val_concat
         raise NotImplementedError("Pretrained model path is required for evaluation.")
+
 def bert4rec(
     model_names: str | list,
     suffix: str,
