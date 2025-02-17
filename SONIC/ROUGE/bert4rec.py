@@ -180,7 +180,7 @@ def calc_bert4rec(
         )
 
         # Get item embeddings
-        item_embs = load_embeddings(model_name, val_dataset, ie)
+        item_embs = load_embeddings(model_name, val, ie)
         input_dim = item_embs.shape[1]  # Get actual input dimension
 
         # Ensure vocabulary size matches checkpoint
