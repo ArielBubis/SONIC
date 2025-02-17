@@ -50,16 +50,14 @@ class BERT4Rec(nn.Module):
                 precomputed_item_embeddings = torch.from_numpy(
                     precomputed_item_embeddings.astype(np.float32)
                 )
-                precomputed_item_embeddings = self.embedding_projection(precomputed_item_embeddings)
-            else:
-                precomputed_item_embeddings = torch.from_numpy(
-                    precomputed_item_embeddings.astype(np.float32)
-                )
+                with torch.no_grad():
+                    precomputed_item_embeddings = self.embedding_projection(precomputed_item_embeddings)
             
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
                 padding_idx=padding_idx
             )
+
         else:
             self.item_embeddings = nn.Embedding(
                 num_embeddings=vocab_size,
