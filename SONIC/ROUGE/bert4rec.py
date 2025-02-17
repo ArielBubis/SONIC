@@ -180,22 +180,34 @@ def calc_bert4rec(
             )
         )
         
-        # Get item embeddings
-        item_embs = load_embeddings(model_name, train, ie)
-        input_dim = item_embs.shape[1]  # Original embedding dimension
         hidden_dim = model_config["hidden_size"]  # Target BERT dimension
-        projection_dim = input_dim
-        if(input_dim > hidden_dim):
-        # hidden_dim = model_config["hidden_size"]  # Target BERT dimension
-            projection_dim = (input_dim + hidden_dim) // 2
         vocab_size = model_config["vocab_size"]
+        # Get item embeddings
+        item_embs = load_embeddings(model_name, val, ie)
+        input_dim = item_embs.shape[1]  # Original embedding dimension
+        # projection_dim = input_dim
+        # if(input_dim > hidden_dim):
+        # # hidden_dim = model_config["hidden_size"]  # Target BERT dimension
+        #     projection_dim = (input_dim + hidden_dim) // 2
         # Create model using original BERT4Rec class
-        model = BERT4Rec(
-            vocab_size= vocab_size,
-            bert_config=model_config,
-            precomputed_item_embeddings=item_embs,
-            projection_strategy='progressive',  # or 'linear' or 'deep'
-            projection_dim=256  # optional intermediate dimension
+        if item_embs.shape[0] < vocab_size:
+            padding = np.zeros((vocab_size - item_embs.shape[0], item_embs.shape[1]))
+            item_embs = np.vstack([item_embs, padding])
+        elif item_embs.shape[0] > vocab_size:
+            item_embs = item_embs[:vocab_size]
+        # model = BERT4Rec(
+        #     vocab_size= vocab_size,
+        #     bert_config=model_config,
+        #     precomputed_item_embeddings=item_embs,
+        #     projection_strategy='progressive',  # or 'linear' or 'deep'
+        #     projection_dim=256  # optional intermediate dimension
+        # )
+            model = BERT4Rec(
+        vocab_size=vocab_size,  # Use checkpoint's vocab size
+        bert_config=model_config,
+        precomputed_item_embeddings=item_embs,
+        projection_strategy='progressive',
+        projection_dim=(input_dim + hidden_dim) // 2  # Calculate intermediate dim
         )
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
