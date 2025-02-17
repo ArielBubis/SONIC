@@ -182,7 +182,17 @@ def calc_bert4rec(
         
         # Get item embeddings
         item_embs = load_embeddings(model_name, train, ie)
-        
+        input_dim = item_embs.shape[1]  # Get actual input dimension
+
+        # Ensure vocabulary size matches checkpoint
+        checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
+        if item_embs.shape[0] != checkpoint_vocab_size - 3:  # Account for special tokens
+            # Pad item embeddings if needed
+            pad_rows = checkpoint_vocab_size - 3 - item_embs.shape[0]
+            if pad_rows > 0:
+                padding = np.zeros((pad_rows, item_embs.shape[1]))
+                item_embs = np.vstack([item_embs, padding])
+
         model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
         model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
 
@@ -195,6 +205,13 @@ def calc_bert4rec(
         )
         # model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
         # model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
+
+        
+        # Print configuration for debugging
+        print(f"Checkpoint vocab size: {checkpoint_vocab_size}")
+        print(f"Model vocab size: {model_config['vocab_size']}")
+        print(f"Input embedding dim: {input_dim}")
+        print(f"Model hidden size: {model_config['hidden_size']}")
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
