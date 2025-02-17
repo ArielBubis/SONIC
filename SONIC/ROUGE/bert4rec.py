@@ -232,7 +232,7 @@ def calc_bert4rec(
         for current_k in k:
             user_recommendations = generate_recommendations(
                 model=model,
-                pred_loader=val_loader,
+                pred_loader=pred_loader,
                 user_history=user_history,
                 device=device,
                 k=max(k)  # Use maximum k value if k is a list
