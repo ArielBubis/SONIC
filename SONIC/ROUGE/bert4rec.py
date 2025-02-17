@@ -154,7 +154,6 @@ def calc_bert4rec(
     
     # Load model checkpoint or create new model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
     if pretrained_path:
         if not os.path.exists(pretrained_path):
             raise FileNotFoundError(f"Checkpoint not found at {pretrained_path}")
@@ -179,10 +178,20 @@ def calc_bert4rec(
                 padding_value=model_config['vocab_size'] - 1  # Last token for padding
             )
         )
-        
+
         # Get item embeddings
-        item_embs = load_embeddings(model_name, train, ie)
-        
+        item_embs = load_embeddings(model_name, val, ie)
+        input_dim = item_embs.shape[1]  # Get actual input dimension
+
+        # Ensure vocabulary size matches checkpoint
+        checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
+        if item_embs.shape[0] != checkpoint_vocab_size - 3:  # Account for special tokens
+            # Pad item embeddings if needed
+            pad_rows = checkpoint_vocab_size - 3 - item_embs.shape[0]
+            if pad_rows > 0:
+                padding = np.zeros((pad_rows, item_embs.shape[1]))
+                item_embs = np.vstack([item_embs, padding])
+
         model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
         model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
 
@@ -193,16 +202,22 @@ def calc_bert4rec(
             precomputed_item_embeddings=item_embs,
             padding_idx=model_config['vocab_size'] - 3
         )
-        model.item_embeddings = nn.Embedding(model_config["vocab_size"], model_config["hidden_size"])
-        model.head = nn.Linear(model_config["hidden_size"], model_config["vocab_size"])
+        
+        # Print configuration for debugging
+        print(f"Checkpoint vocab size: {checkpoint_vocab_size}")
+        print(f"Model vocab size: {model_config['vocab_size']}")
+        print(f"Input embedding dim: {input_dim}")
+        print(f"Model hidden size: {model_config['hidden_size']}")
 
         print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
         print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
 
-        # Load state dict
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        model.to(device)
+        # Load state dict with strict=False to allow for dimension mismatches
+        incompatible_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        print(f"Loaded checkpoint with following incompatible keys: {incompatible_keys}")
         
+        model.to(device)
+
         # Generate recommendations using proper batching
         all_metrics_val = []
         if isinstance(k, int):
@@ -230,7 +245,7 @@ def calc_bert4rec(
             if len(k) > 1:
                 metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
                 metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
-            
+
             df = dict_to_pandas(metrics_val)
 
         if len(k) > 1:
@@ -241,7 +256,6 @@ def calc_bert4rec(
         metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
 
         return metrics_val_concat
-
 
     else:
         raise NotImplementedError("Pretrained model path is required for evaluation.")
