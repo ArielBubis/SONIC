@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import Dict, Optional
 import pandas as pd
 import numpy as np
 import torch.nn as nn
@@ -6,7 +6,6 @@ import torch
 from tqdm.auto import tqdm
 import os
 from .model import BERT4Rec
-from .train import ModelTrainer, TrainingConfig
 from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 from torch.utils.data import DataLoader, Dataset
@@ -227,12 +226,6 @@ def calc_bert4rec(
         all_metrics_val = []
         if isinstance(k, int):
             k = [k]
-        item_count = train.item_id.nunique() + 2
-        pred_dataset = MaskedLMPredictionDataset(val, masking_value=item_count-2, max_length=50, validation_mode=False)
-
-        pred_loader = DataLoader(pred_dataset, batch_size=32,
-                                shuffle=False, num_workers=os.cpu_count() // 2,
-                                collate_fn=PaddingCollateFn(padding_value=item_count-1))
 
         for current_k in k:
             user_recommendations = generate_recommendations(
@@ -318,7 +311,7 @@ def generate_recommendations(
             ])
             last_item_logits = last_item_logits[:, :-2]
             
-            scores, preds = torch.topk(last_item_logits, k=k, dim=-1)
+            preds = torch.topk(last_item_logits, k=k, dim=-1).indices
             preds = preds.cpu().numpy()
 
             for user_id, item_ids in zip(user_ids, preds):
