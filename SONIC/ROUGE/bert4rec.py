@@ -166,12 +166,15 @@ def calc_bert4rec(
         item_embs = load_embeddings(model_name, val, ie)
         input_dim = item_embs.shape[1]
         checkpoint_vocab_size = model_config['vocab_size']
-        
+        # Ensure padding_idx is within valid range
+        padding_idx = checkpoint_vocab_size - 1  # Changed from -3 to -1
+        masking_value = checkpoint_vocab_size - 2
+
         # Create datasets with proper masking and padding values
         val_dataset = MaskedLMPredictionDataset(
             val,
             max_length=128,
-            masking_value=checkpoint_vocab_size - 2,  # Mask token
+            masking_value=masking_value,  # Use separate masking value
             validation_mode=True
         )
         
@@ -180,7 +183,7 @@ def calc_bert4rec(
             batch_size=32,
             shuffle=False,
             collate_fn=PaddingCollateFn(
-                padding_value=checkpoint_vocab_size - 1  # Padding token
+                padding_value=padding_idx  # Use padding_idx as padding value
             )
         )
         
@@ -197,14 +200,14 @@ def calc_bert4rec(
                 ))
                 item_embs = np.vstack([item_embs, padding])
                 print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
-        
         # Initialize model with processed embeddings
         model = BERT4Rec(
             vocab_size=checkpoint_vocab_size,
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
-            padding_idx=checkpoint_vocab_size - 3
+            padding_idx=padding_idx  # Use corrected padding_idx
         )
+
         
         # Log configuration details
         print(f"Model Configuration:")
