@@ -147,116 +147,122 @@ def calc_bert4rec(
     k: int | list = 50,
     pretrained_path: Optional[str] = None
 ) -> pd.DataFrame:
-    """Calculate metrics for BERT4Rec model"""
+    """Calculate metrics for BERT4Rec model with improved embedding handling."""
     run_name = f'{model_name}_{suffix}'
     os.makedirs('metrics', exist_ok=True)
     train, val, user_history, ie = prepare_data(train, val, test, mode)
     
-    # Load model checkpoint or create new model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     if pretrained_path:
         if not os.path.exists(pretrained_path):
             raise FileNotFoundError(f"Checkpoint not found at {pretrained_path}")
         
+        # Load checkpoint and model configuration
         checkpoint = torch.load(pretrained_path, map_location=device)
         model_config = checkpoint['config']
-        # Add a linear layer to project the input embeddings to the correct dimension
-
-        # Create prediction dataset using the original implementation
+        
+        # Load and process embeddings
+        item_embs = load_embeddings(model_name, val, ie)
+        input_dim = item_embs.shape[1]
+        checkpoint_vocab_size = model_config['vocab_size']
+        
+        # Create datasets with proper masking and padding values
         val_dataset = MaskedLMPredictionDataset(
             val,
             max_length=128,
-            masking_value=model_config['vocab_size'] - 2,  # Second to last token for mask
+            masking_value=checkpoint_vocab_size - 2,  # Mask token
             validation_mode=True
         )
         
-        # Create dataloader with the original collate function
         val_loader = DataLoader(
             val_dataset,
             batch_size=32,
             shuffle=False,
             collate_fn=PaddingCollateFn(
-                padding_value=model_config['vocab_size'] - 1  # Last token for padding
+                padding_value=checkpoint_vocab_size - 1  # Padding token
             )
         )
-
-        # Get item embeddings
-        item_embs = load_embeddings(model_name, val, ie)
-        input_dim = item_embs.shape[1]  # Get actual input dimension
-
-        projection_layer = nn.Linear(input_dim, model_config['hidden_size'])
-        projected_item_embs = F.linear(torch.tensor(item_embs, dtype=torch.float32), projection_layer.weight, projection_layer.bias).detach().numpy()
-
-        # Ensure vocabulary size matches checkpoint
-        checkpoint_vocab_size = checkpoint["config"]["vocab_size"]
-        if item_embs.shape[0] != checkpoint_vocab_size - 3:  # Account for special tokens
-            # Pad item embeddings if needed
-            pad_rows = checkpoint_vocab_size - 3 - item_embs.shape[0]
-            if pad_rows > 0:
-                padding = np.zeros((pad_rows, item_embs.shape[1]))
+        
+        # Adjust embedding dimensions if needed
+        if input_dim != model_config['hidden_size']:
+            print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
+            item_embs = item_embs.astype(np.float32)
+            
+            # Handle padding for vocabulary size
+            if item_embs.shape[0] < checkpoint_vocab_size - 3:
+                padding = np.zeros((
+                    checkpoint_vocab_size - 3 - item_embs.shape[0],
+                    item_embs.shape[1]
+                ))
                 item_embs = np.vstack([item_embs, padding])
-
-        model_config["vocab_size"] = checkpoint["config"]["vocab_size"]  # Ensure 95603
-        model_config["hidden_size"] = checkpoint["config"]["hidden_size"]  # Ensure 128
-
-        # Create model using original BERT4Rec class
+                print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
+        
+        # Initialize model with processed embeddings
         model = BERT4Rec(
-            vocab_size=model_config['vocab_size'],
+            vocab_size=checkpoint_vocab_size,
             bert_config=model_config,
-            precomputed_item_embeddings=projected_item_embs,
-            padding_idx=model_config['vocab_size'] - 3
+            precomputed_item_embeddings=item_embs,
+            padding_idx=checkpoint_vocab_size - 3
         )
         
-        # Print configuration for debugging
-        print(f"Checkpoint vocab size: {checkpoint_vocab_size}")
-        print(f"Model vocab size: {model_config['vocab_size']}")
-        print(f"Input embedding dim: {input_dim}")
-        print(f"Model hidden size: {model_config['hidden_size']}")
-
-        print(f"Loaded model config hidden_size: {model_config['hidden_size']}")
-        print(f"Expected hidden_size: {model.bert_config['hidden_size']}")
-
-        # Load state dict with strict=False to allow for dimension mismatches
+        # Log configuration details
+        print(f"Model Configuration:")
+        print(f"- Vocabulary Size: {checkpoint_vocab_size}")
+        print(f"- Hidden Size: {model_config['hidden_size']}")
+        print(f"- Input Embedding Dimension: {input_dim}")
+        print(f"- Number of Items: {len(train['item_id'].unique())}")
+        
+        # Load checkpoint weights
         incompatible_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        print(f"Loaded checkpoint with following incompatible keys: {incompatible_keys}")
+        if incompatible_keys.missing_keys or incompatible_keys.unexpected_keys:
+            print("Warning: Some weights were not loaded:")
+            print(f"- Missing keys: {incompatible_keys.missing_keys}")
+            print(f"- Unexpected keys: {incompatible_keys.unexpected_keys}")
         
         model.to(device)
-
-        # Generate recommendations using proper batching
+        model.eval()  # Ensure evaluation mode
+        
+        # Generate recommendations and calculate metrics
         all_metrics_val = []
-        if isinstance(k, int):
-            k = [k]
-
-        for current_k in k:
+        k_values = [k] if isinstance(k, int) else k
+        
+        for current_k in k_values:
+            # Generate recommendations
             user_recommendations = generate_recommendations(
                 model=model,
                 pred_loader=val_loader,
                 user_history=user_history,
                 device=device,
-                k=max(k)  # Use maximum k value if k is a list
+                k=current_k
             )
-
+            
+            # Calculate metrics
             df = dict_to_pandas(user_recommendations)
             metrics_val = calc_metrics(val, df, current_k)
             metrics_val = metrics_val.apply(mean_confidence_interval)
-            all_metrics_val.append(metrics_val)
-            if len(k) > 1:
+            
+            # Format metric names
+            if len(k_values) > 1:
                 metrics_val.columns = [f'{col.split("@")[0]}@k' for col in metrics_val.columns]
-                metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
-
-            df = dict_to_pandas(metrics_val)
-
-        if len(k) > 1:
-            metrics_val_concat = pd.concat(all_metrics_val, axis=0)
-        else:
-            metrics_val_concat = all_metrics_val[0]
-
+                metrics_val.index = [f'mean at k={current_k}', f'CI at k={current_k}']
+            
+            all_metrics_val.append(metrics_val)
+        
+        # Combine metrics for different k values
+        metrics_val_concat = (
+            pd.concat(all_metrics_val, axis=0) if len(k_values) > 1 
+            else all_metrics_val[0]
+        )
+        
+        # Save results
         metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
-
+        print(f"Saved metrics to metrics/{run_name}_val.csv")
+        
         return metrics_val_concat
-
     else:
         raise NotImplementedError("Pretrained model path is required for evaluation.")
+    
 
 def bert4rec(
     model_names: str | list,
@@ -286,37 +292,47 @@ def bert4rec(
     
 
 def generate_recommendations(
-    model,
+    model: nn.Module,
     pred_loader: DataLoader,
     user_history: Dict[int, list],
     device: torch.device,
     k: int = 100
 ) -> Dict[int, list]:
-    """Generate recommendations for users."""
+    """Generate recommendations with improved batch processing."""
     model.eval()
     user_recommendations = {}
-
+    
     with torch.no_grad():
-        for batch in tqdm(pred_loader):
+        for batch in tqdm(pred_loader, desc="Generating recommendations"):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             user_ids = batch['user_id']
-
+            
+            # Get model outputs
             outputs = model(input_ids, attention_mask)
-            seq_lengths = attention_mask.sum(dim=1).long() 
-
+            
+            # Get last item predictions
+            seq_lengths = attention_mask.sum(dim=1).long()
             last_item_logits = torch.stack([
                 outputs[i, seq_lengths[i] - 1, :]
                 for i in range(len(seq_lengths))
             ])
+            
+            # Remove special tokens from predictions
             last_item_logits = last_item_logits[:, :-2]
             
+            # Get top-k predictions efficiently
             preds = torch.topk(last_item_logits, k=k, dim=-1).indices
             preds = preds.cpu().numpy()
-
+            
+            # Filter recommendations
             for user_id, item_ids in zip(user_ids, preds):
-                history = user_history.get(user_id.item(), set())
-                recs = [item_id for item_id in item_ids if item_id not in history][:k]
-                user_recommendations[user_id.item()] = recs
-
+                user_id = user_id.item()
+                history = user_history.get(user_id, set())
+                recs = [
+                    item_id for item_id in item_ids 
+                    if item_id not in history
+                ][:k]
+                user_recommendations[user_id] = recs
+    
     return user_recommendations
