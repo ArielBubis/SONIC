@@ -161,20 +161,31 @@ def calc_bert4rec(
         # Load checkpoint and model configuration
         checkpoint = torch.load(pretrained_path, map_location=device)
         model_config = checkpoint['config']
-        
+        # Calculate correct vocabulary sizes
+        base_vocab_size = len(train['item_id'].unique())  # Number of actual items
+        num_special_tokens = 2  # Mask and padding tokens
+        total_vocab_size = base_vocab_size + num_special_tokens
+
         # Load and process embeddings
-        item_embs = load_embeddings(model_name, val, ie)
-        input_dim = item_embs.shape[1]
-        checkpoint_vocab_size = model_config['vocab_size']
+        # item_embs = load_embeddings(model_name, val, ie)
+        # input_dim = item_embs.shape[1]
+        # checkpoint_vocab_size = model_config['vocab_size']
         # Ensure padding_idx is within valid range
-        padding_idx = checkpoint_vocab_size - 1  # Changed from -3 to -1
-        masking_value = checkpoint_vocab_size - 2
+        # Set token indices
+        mask_token_idx = total_vocab_size - 2
+        padding_idx = total_vocab_size - 1
+
+        print(f"Vocabulary details:")
+        print(f"- Base vocab size: {base_vocab_size}")
+        print(f"- Total vocab size: {total_vocab_size}")
+        print(f"- Mask token index: {mask_token_idx}")
+        print(f"- Padding token index: {padding_idx}")
 
         # Create datasets with proper masking and padding values
         val_dataset = MaskedLMPredictionDataset(
             val,
             max_length=128,
-            masking_value=masking_value,  # Use separate masking value
+            masking_value=mask_token_idx,
             validation_mode=True
         )
         
@@ -183,38 +194,53 @@ def calc_bert4rec(
             batch_size=32,
             shuffle=False,
             collate_fn=PaddingCollateFn(
-                padding_value=padding_idx  # Use padding_idx as padding value
+                padding_value=padding_idx
             )
         )
-        
-        # Adjust embedding dimensions if needed
-        if input_dim != model_config['hidden_size']:
-            print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
-            item_embs = item_embs.astype(np.float32)
+        item_embs = load_embeddings(model_name, val, ie)
+        if item_embs.shape[0] < base_vocab_size:
+            padding = np.zeros((
+                base_vocab_size - item_embs.shape[0],
+                item_embs.shape[1]
+            ))
+            item_embs = np.vstack([item_embs, padding])
+
+
+        # # Adjust embedding dimensions if needed
+        # if input_dim != model_config['hidden_size']:
+        #     print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
+        #     item_embs = item_embs.astype(np.float32)
             
-            # Handle padding for vocabulary size
-            if item_embs.shape[0] < checkpoint_vocab_size - 3:
-                padding = np.zeros((
-                    checkpoint_vocab_size - 3 - item_embs.shape[0],
-                    item_embs.shape[1]
-                ))
-                item_embs = np.vstack([item_embs, padding])
-                print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
+        #     # Handle padding for vocabulary size
+        #     if item_embs.shape[0] < checkpoint_vocab_size - 3:
+        #         padding = np.zeros((
+        #             checkpoint_vocab_size - 3 - item_embs.shape[0],
+        #             item_embs.shape[1]
+        #         ))
+        #         item_embs = np.vstack([item_embs, padding])
+        #         print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
+
+        # Add embeddings for special tokens
+        special_token_embeddings = np.zeros((num_special_tokens, item_embs.shape[1]))
+        item_embs = np.vstack([item_embs, special_token_embeddings])
+
+        # Update model config
+        model_config['vocab_size'] = total_vocab_size
         # Initialize model with processed embeddings
         model = BERT4Rec(
-            vocab_size=checkpoint_vocab_size,
+            vocab_size=total_vocab_size,
             bert_config=model_config,
             precomputed_item_embeddings=item_embs,
             padding_idx=padding_idx  # Use corrected padding_idx
         )
 
         
-        # Log configuration details
-        print(f"Model Configuration:")
-        print(f"- Vocabulary Size: {checkpoint_vocab_size}")
-        print(f"- Hidden Size: {model_config['hidden_size']}")
-        print(f"- Input Embedding Dimension: {input_dim}")
-        print(f"- Number of Items: {len(train['item_id'].unique())}")
+        # # Log configuration details
+        # print(f"Model Configuration:")
+        # print(f"- Vocabulary Size: {checkpoint_vocab_size}")
+        # print(f"- Hidden Size: {model_config['hidden_size']}")
+        # print(f"- Input Embedding Dimension: {input_dim}")
+        # print(f"- Number of Items: {len(train['item_id'].unique())}")
         
         # Load checkpoint weights
         incompatible_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
