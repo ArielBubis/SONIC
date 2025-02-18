@@ -161,14 +161,44 @@ def calc_bert4rec(
         # Load checkpoint and model configuration
         checkpoint = torch.load(pretrained_path, map_location=device)
         model_config = checkpoint['config']
+
         # Calculate correct vocabulary sizes
+        checkpoint_hidden_size = model_config['hidden_size']
         base_vocab_size = len(train['item_id'].unique())  # Number of actual items
         num_special_tokens = 2  # Mask and padding tokens
         total_vocab_size = base_vocab_size + num_special_tokens
 
         # Load and process embeddings
-        # item_embs = load_embeddings(model_name, val, ie)
-        # input_dim = item_embs.shape[1]
+        item_embs = load_embeddings(model_name, val, ie)
+        input_dim = item_embs.shape[1]
+
+        print(f"Dimensions:")
+        print(f"- Input embedding dim: {input_dim}")
+        print(f"- Checkpoint hidden size: {checkpoint_hidden_size}")
+        print(f"- Vocabulary size: {total_vocab_size}")
+        if input_dim != checkpoint_hidden_size:
+            print(f"Projecting embeddings from {input_dim} to {checkpoint_hidden_size}")
+            projection = nn.Linear(input_dim, checkpoint_hidden_size)
+            item_embs_tensor = torch.from_numpy(item_embs.astype(np.float32))
+            with torch.no_grad():
+                item_embs = projection(item_embs_tensor).numpy()
+
+        # Pad embeddings if needed
+        if item_embs.shape[0] < base_vocab_size:
+            padding = np.zeros((
+                base_vocab_size - item_embs.shape[0],
+                checkpoint_hidden_size  # Use checkpoint dimension
+            ))
+            item_embs = np.vstack([item_embs, padding])
+
+        # Add special token embeddings
+        special_token_embeddings = np.zeros((num_special_tokens, checkpoint_hidden_size))
+        item_embs = np.vstack([item_embs, special_token_embeddings])
+
+        # Update model config
+        model_config['vocab_size'] = total_vocab_size
+        model_config['hidden_size'] = checkpoint_hidden_size
+
         # checkpoint_vocab_size = model_config['vocab_size']
         # Ensure padding_idx is within valid range
         # Set token indices
@@ -206,7 +236,7 @@ def calc_bert4rec(
             item_embs = np.vstack([item_embs, padding])
 
 
-        # # Adjust embedding dimensions if needed
+        # # # Adjust embedding dimensions if needed
         # if input_dim != model_config['hidden_size']:
         #     print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
         #     item_embs = item_embs.astype(np.float32)
