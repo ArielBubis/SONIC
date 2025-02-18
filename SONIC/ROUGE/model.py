@@ -3,6 +3,7 @@ import torch.nn as nn
 from transformers import BertModel, BertConfig
 from typing import Dict, Any, Optional
 import numpy as np
+import logging
 
 class BERT4Rec(nn.Module):
     def __init__(
@@ -15,8 +16,8 @@ class BERT4Rec(nn.Module):
         padding_idx: int = -1,
         init_std: float = 0.02
     ):
+        """Initialize BERT4Rec model with simpler, more robust architecture."""
         super().__init__()
-
         self.vocab_size = vocab_size
         self.bert_config = bert_config
         self.add_head = add_head
@@ -24,130 +25,115 @@ class BERT4Rec(nn.Module):
         self.padding_idx = padding_idx
         self.init_std = init_std
 
-        # Initialize BERT model first
+        # Initialize BERT model first to ensure proper setup
         self.transformer_model = BertModel(BertConfig(**bert_config))
-        print(f"Initialized BERT model with config: {bert_config}")
+        logging.info(f"Initialized transformer with config: {bert_config}")
 
+        # Initialize embeddings
         if precomputed_item_embeddings is not None:
-            input_dim = precomputed_item_embeddings.shape[1]
-            hidden_size = bert_config['hidden_size']
-            print(f"Precomputed embeddings shape: {precomputed_item_embeddings.shape}")
-
-            # Create projection layer if dimensions don't match
-            if input_dim != hidden_size:
-                self.embedding_projection = nn.Linear(input_dim, hidden_size)
-                precomputed_item_embeddings = torch.from_numpy(
-                    precomputed_item_embeddings.astype(np.float32)
+            # Convert and prepare embeddings
+            precomputed_item_embeddings = torch.from_numpy(
+                precomputed_item_embeddings.astype(np.float32)
+            )
+            
+            # Handle dimension mismatch if needed
+            if precomputed_item_embeddings.shape[1] != bert_config['hidden_size']:
+                logging.info(f"Adjusting embedding dimensions from {precomputed_item_embeddings.shape[1]} to {bert_config['hidden_size']}")
+                self.embedding_projection = nn.Linear(
+                    precomputed_item_embeddings.shape[1],
+                    bert_config['hidden_size']
                 )
                 with torch.no_grad():
                     precomputed_item_embeddings = self.embedding_projection(precomputed_item_embeddings)
-                print(f"Projected embeddings shape: {precomputed_item_embeddings.shape}")
-            else:
-                precomputed_item_embeddings = torch.from_numpy(
-                    precomputed_item_embeddings.astype(np.float32)
-                )
-
-            # Pad embeddings if needed
-            if precomputed_item_embeddings.shape[0] < vocab_size:
-                padding = torch.zeros(
-                    vocab_size - precomputed_item_embeddings.shape[0], 
-                    hidden_size,
-                    dtype=precomputed_item_embeddings.dtype
-                )
-                precomputed_item_embeddings = torch.cat([precomputed_item_embeddings, padding], dim=0)
-                print(f"Padded embeddings shape: {precomputed_item_embeddings.shape}")
-
-            # Initialize embeddings with precomputed values
+            
+            # Initialize embedding layer
             self.item_embeddings = nn.Embedding.from_pretrained(
                 precomputed_item_embeddings,
                 padding_idx=padding_idx,
-                freeze=False
+                freeze=False  # Allow fine-tuning
             )
-            print(f"Initialized item embeddings with precomputed values")
-
-            # Resize BERT embeddings to match vocabulary size
-            self.transformer_model.resize_token_embeddings(vocab_size)
-            print(f"Resized BERT token embeddings to vocab size: {vocab_size}")
-
-            # Copy item embeddings to BERT embeddings
-            with torch.no_grad():
-                self.transformer_model.embeddings.word_embeddings.weight.copy_(
-                    self.item_embeddings.weight
-                )
-            print(f"Copied item embeddings to BERT embeddings")
+            logging.info(f"Initialized embeddings from precomputed values: {precomputed_item_embeddings.shape}")
         else:
+            # Initialize from scratch if no precomputed embeddings
             self.item_embeddings = nn.Embedding(
                 num_embeddings=vocab_size,
                 embedding_dim=bert_config['hidden_size'],
                 padding_idx=padding_idx
             )
-            # Resize BERT embeddings
-            self.transformer_model.resize_token_embeddings(vocab_size)
-            print(f"Initialized and resized item embeddings to vocab size: {vocab_size}")
+            logging.info(f"Initialized embeddings from scratch: {vocab_size} x {bert_config['hidden_size']}")
 
+        # Ensure transformer embeddings match
+        self.transformer_model.resize_token_embeddings(vocab_size)
+        
+        # Add output head if needed
         if self.add_head:
             self.head = nn.Linear(
                 bert_config['hidden_size'],
                 vocab_size,
-                bias=True  # Changed to match BERT's output layer
+                bias=True  # Using bias for better expressivity
             )
             if self.tie_weights:
-                self.head.weight = self.item_embeddings.weight
-            print(f"Initialized head with tied weights: {self.tie_weights}")
+                # Tie weights if using same dimensions
+                if not hasattr(self, 'embedding_projection'):
+                    self.head.weight = self.item_embeddings.weight
+                    logging.info("Tied embedding and output weights")
+                else:
+                    logging.info("Skipped weight tying due to dimension projection")
 
-        # Initialize weights if no precomputed embeddings
-        if precomputed_item_embeddings is None:
+        # Initialize weights
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """Initialize model weights with proper scaling."""
+        if not hasattr(self, 'item_embeddings_pretrained'):
             self.item_embeddings.weight.data.normal_(mean=0.0, std=self.init_std)
-            print(f"Initialized item embeddings with normal distribution")
+            logging.info(f"Initialized embedding weights with std={self.init_std}")
+        
         if self.padding_idx is not None:
             self.item_embeddings.weight.data[self.padding_idx].zero_()
-            print(f"Zeroed padding index: {self.padding_idx}")
+            logging.info(f"Zeroed padding token embeddings at index {self.padding_idx}")
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        # Get embeddings and project if needed
+        """Forward pass incorporating embedding projection if needed."""
+        # Get embeddings
         embeds = self.item_embeddings(input_ids)
+        
+        # Project if dimensions were adjusted
         if hasattr(self, 'embedding_projection'):
             embeds = self.embedding_projection(embeds)
-            print(f"Projected embeddings in forward pass")
 
+        # Pass through transformer
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
             attention_mask=attention_mask
         )
         outputs = transformer_outputs.last_hidden_state
 
+        # Apply output head if present
         if self.add_head:
             outputs = self.head(outputs)
-            # print(f"Applied head in forward pass")
 
         return outputs
 
-    def resize_token_embeddings(self, new_num_tokens: Optional[int] = None) -> nn.Embedding:
-        """Resize token embeddings and ensure weight tying is maintained."""
-        # Resize BERT embeddings
-        self.transformer_model.resize_token_embeddings(new_num_tokens)
-        print(f"Resized BERT token embeddings to new num tokens: {new_num_tokens}")
+    def freeze_embeddings(self, freeze: bool = True):
+        """Freeze or unfreeze embedding layers."""
+        for param in self.item_embeddings.parameters():
+            param.requires_grad = not freeze
+        if hasattr(self, 'embedding_projection'):
+            for param in self.embedding_projection.parameters():
+                param.requires_grad = not freeze
+        status = "Frozen" if freeze else "Unfrozen"
+        logging.info(f"{status} embedding layers")
 
-        if new_num_tokens is None:
-            return self.item_embeddings
-
-        # Create new embeddings
-        old_embeddings = self.item_embeddings
-        self.item_embeddings = nn.Embedding(
-            new_num_tokens,
-            self.bert_config['hidden_size'],
-            padding_idx=self.padding_idx
+    def get_attention_weights(self, input_ids: torch.Tensor, attention_mask: torch.Tensor):
+        """Get attention weights for analysis."""
+        embeds = self.item_embeddings(input_ids)
+        if hasattr(self, 'embedding_projection'):
+            embeds = self.embedding_projection(embeds)
+            
+        outputs = self.transformer_model(
+            inputs_embeds=embeds,
+            attention_mask=attention_mask,
+            output_attentions=True
         )
-        
-        # Copy weights for existing tokens
-        num_tokens_to_copy = min(old_embeddings.num_embeddings, new_num_tokens)
-        self.item_embeddings.weight.data[:num_tokens_to_copy] = \
-            old_embeddings.weight.data[:num_tokens_to_copy]
-        print(f"Copied weights for existing tokens")
-
-        # Update head if weights are tied
-        if self.tie_weights:
-            self.head.weight = self.item_embeddings.weight
-            print(f"Updated head weights to tie with item embeddings")
-
-        return self.item_embeddings
+        return outputs.attentions
