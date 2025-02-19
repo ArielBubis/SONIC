@@ -281,7 +281,8 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
         pred_loader=pred_loader,
         user_history=user_history,
         item_embeddings=embs,
-        item_count=item_count
+        item_count=item_count,
+        embedding_name = model_name
     )
     all_metrics_val = []
     k_values = [k] if isinstance(k, int) else k
