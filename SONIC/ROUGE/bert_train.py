@@ -367,10 +367,28 @@ def train_model(
     save_dir = Path(save_dir)
     save_dir.mkdir(exist_ok=True)
 
-    best_params_path = os.path.join(os.path.dirname(__file__), 'best_params.json')
-    with open(best_params_path, 'r') as f:
-        best_params = json.load(f)
-
+    # best_params_path = os.path.join(os.path.dirname(__file__), 'best_params.json')
+    # # If the file is missing, set to an empty dict (or other default params)
+    # if not os.path.exists(best_params_path):
+    #     best_params = {}  # Empty dictionary
+    # else:
+    #     with open(best_params_path, 'r') as f:
+    #         best_params = json.load(f)
+    best_params =  {
+        "model_params": {
+            "hidden_size": 128,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "intermediate_size": 256
+        },
+        "train_params": {
+            "lr": 0.01,
+            "weight_decay": 0.01,
+            "batch_size": 128
+        },
+  "val_loss": 9.748358074824015,
+  "run_name": "search_20250214_163142"
+}
     # Create model config
     model_config = {
         'vocab_size': item_count,
