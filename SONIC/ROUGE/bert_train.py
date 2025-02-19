@@ -166,11 +166,11 @@ class BERT4RecTrainer:
         for epoch in tqdm(range(last_epoch, self.config.num_epochs)):
             # Training phase
             train_loss = self._train_epoch()
-            print(f"Epoch {epoch}: Train Loss = {train_loss:.4f}")
+            # print(f"Epoch {epoch}: Train Loss = {train_loss:.4f}")
 
             # Validation phase
             val_loss = self._evaluate()
-            print(f"Epoch {epoch}: Validation Loss = {val_loss:.4f}")
+            # print(f"Epoch {epoch}: Validation Loss = {val_loss:.4f}")
 
             self.scheduler.step()
 
@@ -288,7 +288,6 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
     for current_k in k_values:
         # Generate recommendations
         user_recommendations = BERT4RecTrainer.generate_recommendations(
-            model=model,
             pred_loader=eval_loader,
             user_history=user_history,
             k=current_k
@@ -441,6 +440,7 @@ def train_model(
         model.load_state_dict(checkpoint['model_state_dict'])
         trainer.best_val_loss = checkpoint['best_val_loss']
         log_message(f"Final model loaded from {final_model_path}")
+
     else:
         # Check if checkpoint exists
         checkpoint_path = save_dir / f"{run_name}_best.pt"
