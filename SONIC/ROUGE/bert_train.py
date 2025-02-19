@@ -234,7 +234,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
     item_count = train.item_id.nunique() + 2
     train_dataset = MaskedLMDataset(train, masking_value=item_count-2, max_length=max_seq_len, mlm_probability=0.2, force_last_item_masking_prob=0)
     eval_dataset = MaskedLMDataset(val, masking_value=item_count-2, max_length=max_seq_len, mlm_probability=0.2, force_last_item_masking_prob=0)
-    pred_dataset = MaskedLMPredictionDataset(train, masking_value=item_count-2, max_length=50, validation_mode=False)
+    pred_dataset = MaskedLMPredictionDataset(val, masking_value=item_count-2, max_length=50, validation_mode=False)
 
 
     train_loader = DataLoader(train_dataset, batch_size=32,
@@ -283,12 +283,12 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model.to(device)
-    model.eval()  # Ensure evaluation mode
+    # model.eval()  # Ensure evaluation mode
 
     for current_k in k_values:
         # Generate recommendations
         user_recommendations = trainer.generate_recommendations(
-            pred_loader=eval_loader,
+            pred_loader=pred_loader,
             user_history=user_history,
             k=current_k
         )
@@ -316,21 +316,6 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
     print(f"Saved metrics to metrics/{run_name}_val.csv")
     
     return metrics_val_concat
-
-
-
-# class TrainingConfig:
-#     model_name: str = "BERT4Rec"
-#     max_seq_len: int = 128
-#     batch_size: int = 128
-#     num_epochs: int = 200
-#     lr: float = 0.001
-#     weight_decay: float = 0.01
-#     patience_threshold: int = 16
-#     grad_clip_norm: float = 1.0
-#     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-#     tie_weights: bool = True
-#     init_std: float = 0.02
 
 def train_model(
     train_loader: DataLoader,
