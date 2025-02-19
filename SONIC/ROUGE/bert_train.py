@@ -32,7 +32,7 @@ class ModelConfig:
     hidden_dropout_prob: float = 0.1
     initializer_range: float = 0.02
 
-# @dataclass
+@dataclass
 class TrainingConfig:
     model_name: str = "BERT4Rec"
     max_seq_len: int = 128
