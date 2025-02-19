@@ -284,7 +284,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
 
     model.to(device)
     # model.eval()  # Ensure evaluation mode
-
+    os.makedirs('metrics', exist_ok=True)
     for current_k in k_values:
         # Generate recommendations
         user_recommendations = trainer.generate_recommendations(
