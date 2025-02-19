@@ -269,7 +269,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
         collate_fn=PaddingCollateFn(padding_value=item_count-1)
     )
     
-    model, user_recommendations = train_model(
+    model, trainer = train_model(
         train_loader=train_loader,
         eval_loader=eval_loader,
         pred_loader=pred_loader,
@@ -287,7 +287,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
 
     for current_k in k_values:
         # Generate recommendations
-        user_recommendations = BERT4RecTrainer.generate_recommendations(
+        user_recommendations = trainer.generate_recommendations(
             pred_loader=eval_loader,
             user_history=user_history,
             k=current_k
@@ -480,11 +480,11 @@ def train_model(
     # log_message(f"\nTraining completed!")
     # log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
-    # Generate and evaluate final recommendations
-    recommendations = trainer.generate_recommendations(
-        pred_loader,
-        user_history
-    )
+    # # Generate and evaluate final recommendations
+    # recommendations = trainer.generate_recommendations(
+    #     pred_loader,
+    #     user_history
+    # )
 
     # # Save final model
     # final_model_path = save_dir / f"{run_name}_final.pt"
@@ -497,7 +497,7 @@ def train_model(
 
     # log_message(f"\nFinal model saved to {final_model_path}")
 
-    return model, recommendations
+    return model, trainer
 
 def bert_train(model_names, suffix, k, mode='val',max_seq_len=128):
     train = pd.read_parquet('data/train.pqt')
