@@ -32,9 +32,8 @@ class ModelConfig:
     hidden_dropout_prob: float = 0.1
     initializer_range: float = 0.02
 
-@dataclass
+# @dataclass
 class TrainingConfig:
-
     model_name: str = "BERT4Rec"
     max_seq_len: int = 128
     batch_size: int = 128
@@ -46,11 +45,6 @@ class TrainingConfig:
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
     tie_weights: bool = True
     init_std: float = 0.02
-    mlm_probability: float = 0.2
-    force_last_item_masking_prob: float = 0
-    logging_steps: int = 100
-    save_steps: int = 1000
-    eval_steps: int = 1000
 
 @dataclass
 class DataConfig:
@@ -327,18 +321,18 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
 
 
 
-class TrainingConfig:
-    model_name: str = "BERT4Rec"
-    max_seq_len: int = 128
-    batch_size: int = 128
-    num_epochs: int = 200
-    lr: float = 0.001
-    weight_decay: float = 0.01
-    patience_threshold: int = 16
-    grad_clip_norm: float = 1.0
-    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-    tie_weights: bool = True
-    init_std: float = 0.02
+# class TrainingConfig:
+#     model_name: str = "BERT4Rec"
+#     max_seq_len: int = 128
+#     batch_size: int = 128
+#     num_epochs: int = 200
+#     lr: float = 0.001
+#     weight_decay: float = 0.01
+#     patience_threshold: int = 16
+#     grad_clip_norm: float = 1.0
+#     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+#     tie_weights: bool = True
+#     init_std: float = 0.02
 
 def train_model(
     train_loader: DataLoader,
