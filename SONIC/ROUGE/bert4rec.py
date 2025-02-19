@@ -237,18 +237,18 @@ def calc_bert4rec(
 
 
         # # # Adjust embedding dimensions if needed
-        # if input_dim != model_config['hidden_size']:
-        #     print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
-        #     item_embs = item_embs.astype(np.float32)
+        if input_dim != model_config['hidden_size']:
+            print(f"Projecting embeddings from {input_dim} to {model_config['hidden_size']}")
+            item_embs = item_embs.astype(np.float32)
             
-        #     # Handle padding for vocabulary size
-        #     if item_embs.shape[0] < checkpoint_vocab_size - 3:
-        #         padding = np.zeros((
-        #             checkpoint_vocab_size - 3 - item_embs.shape[0],
-        #             item_embs.shape[1]
-        #         ))
-        #         item_embs = np.vstack([item_embs, padding])
-        #         print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
+            # Handle padding for vocabulary size
+            if item_embs.shape[0] < checkpoint_vocab_size - 3:
+                padding = np.zeros((
+                    checkpoint_vocab_size - 3 - item_embs.shape[0],
+                    item_embs.shape[1]
+                ))
+                item_embs = np.vstack([item_embs, padding])
+                print(f"Padded embeddings to match vocabulary size: {item_embs.shape}")
 
         # Add embeddings for special tokens
         special_token_embeddings = np.zeros((num_special_tokens, item_embs.shape[1]))
