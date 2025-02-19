@@ -291,7 +291,6 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len = 128):
             model=model,
             pred_loader=eval_loader,
             user_history=user_history,
-            device=device,
             k=current_k
         )
         
@@ -432,11 +431,54 @@ def train_model(
     log_message(f"Model parameters: {json.dumps(best_params['model_params'], indent=2)}")
     log_message(f"Training parameters: {json.dumps(best_params['train_params'], indent=2)}")
 
-    # Train model
-    trainer.train()
+    # # Train model
+    # trainer.train()
+    final_model_path = save_dir / f"{run_name}_final.pt"
 
-    log_message(f"\nTraining completed!")
-    log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
+    if final_model_path.exists():
+        print(f"Final model found at {final_model_path}. Loading model...")
+        checkpoint = torch.load(final_model_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        trainer.best_val_loss = checkpoint['best_val_loss']
+        log_message(f"Final model loaded from {final_model_path}")
+    else:
+        # Check if checkpoint exists
+        checkpoint_path = save_dir / f"{run_name}_best.pt"
+        if checkpoint_path.exists():
+            print(f"Checkpoint found at {checkpoint_path}. Loading checkpoint...")
+            trainer.load_checkpoint(checkpoint_path)
+            log_message(f"Checkpoint loaded from {checkpoint_path}")
+        else:
+            # Create log file
+            log_file = save_dir / f"{run_name}_training_log.txt"
+
+            def log_message(message: str):
+                print(message)
+                with open(log_file, 'a') as f:
+                    f.write(message + '\n')
+
+            log_message(f"Starting final training with best parameters:")
+            log_message(f"Model parameters: {json.dumps(best_params['model_params'], indent=2)}")
+            log_message(f"Training parameters: {json.dumps(best_params['train_params'], indent=2)}")
+
+            # Train model
+            trainer.train()
+
+            log_message(f"\nTraining completed!")
+            log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
+
+            # Save final model
+            torch.save({
+                'model_state_dict': model.state_dict(),
+                'config': model_config,
+                'train_config': asdict(train_config),
+                'best_val_loss': trainer.best_val_loss
+            }, final_model_path)
+
+            log_message(f"\nFinal model saved to {final_model_path}")
+
+    # log_message(f"\nTraining completed!")
+    # log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
     # Generate and evaluate final recommendations
     recommendations = trainer.generate_recommendations(
@@ -444,16 +486,16 @@ def train_model(
         user_history
     )
 
-    # Save final model
-    final_model_path = save_dir / f"{run_name}_final.pt"
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'config': model_config,
-        'train_config': asdict(train_config),
-        'best_val_loss': trainer.best_val_loss
-    }, final_model_path)
+    # # Save final model
+    # final_model_path = save_dir / f"{run_name}_final.pt"
+    # torch.save({
+    #     'model_state_dict': model.state_dict(),
+    #     'config': model_config,
+    #     'train_config': asdict(train_config),
+    #     'best_val_loss': trainer.best_val_loss
+    # }, final_model_path)
 
-    log_message(f"\nFinal model saved to {final_model_path}")
+    # log_message(f"\nFinal model saved to {final_model_path}")
 
     return model, recommendations
 
