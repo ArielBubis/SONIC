@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 from typing import Dict
+from matplotlib import pyplot as plt
 import pandas as pd
 import torch
 from SONIC.CREAM.sonic_utils import (
@@ -86,6 +87,8 @@ class BERT4RecTrainer:
         self.patience_counter = 0
 
         os.makedirs(f"checkpoints/{config.model_name}", exist_ok=True)
+        self.train_losses = []
+        self.val_losses = []
 
     def _save_checkpoint(self, epoch: int, val_loss: float) -> None:
         checkpoint = {
@@ -119,7 +122,7 @@ class BERT4RecTrainer:
 
             self.optimizer.zero_grad()
 
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast("cuda"):
                 outputs = self.model(input_ids, attention_mask)
                 loss = self.criterion(
                     outputs.view(-1, outputs.size(-1)), labels.view(-1)
@@ -160,13 +163,23 @@ class BERT4RecTrainer:
         for epoch in tqdm(range(last_epoch, self.config.num_epochs)):
             # Training phase
             train_loss = self._train_epoch()
-            # print(f"Epoch {epoch}: Train Loss = {train_loss:.4f}")
+            self.train_losses.append(train_loss)
 
             # Validation phase
             val_loss = self._evaluate()
-            # print(f"Epoch {epoch}: Validation Loss = {val_loss:.4f}")
+            self.val_losses.append(val_loss)
+
+            loss_diff = train_loss - val_loss
 
             self.scheduler.step()
+            tqdm.write(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Diff = {loss_diff:.4f}")
+            
+            # Early warning for overfitting
+            if loss_diff < -0.1:  # Validation loss significantly higher than training loss
+                tqdm.write("Warning: Possible underfitting")
+            elif loss_diff > 0.1:  # Training loss significantly higher than validation loss
+                tqdm.write("Warning: Possible overfitting")
+
 
             # Model checkpoint handling
             if val_loss < self.best_val_loss:
@@ -218,6 +231,15 @@ class BERT4RecTrainer:
 
         return user_recommendations
 
+def plot_losses(trainer: BERT4RecTrainer):
+    plt.figure(figsize=(10, 5))
+    plt.plot(trainer.train_losses, label='Training Loss')
+    plt.plot(trainer.val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.title('Training and Validation Loss')
+    plt.show()
 
 def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
     run_name = f"bert4rec_{model_name}"
@@ -284,6 +306,9 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
         item_count=item_count,
         embedding_name=model_name,
     )
+
+    plot_losses(trainer)
+
     all_metrics_val = []
     k_values = [k] if isinstance(k, int) else k
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -297,7 +322,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
             user_history=user_history,
             k=current_k
         )
-
+        check_recommendation_quality(user_recommendations, user_history)
         # Calculate metrics
         df = dict_to_pandas(user_recommendations)
         metrics_val = calc_metrics(val, df, current_k)
@@ -452,6 +477,9 @@ def train_model(
             # Train model
             trainer.train()
 
+            ################# testing for overfitting and underfitting be claude ai
+            analyze_model_performance(model, train_loader, eval_loader)    
+
             log_message(f"\nTraining completed!")
             log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
@@ -505,3 +533,45 @@ def bert_train(model_names, suffix, k, mode="val", max_seq_len=128):
                 for model_name in model_names
             ]
         )
+
+
+
+################# testing for overfitting and underfitting be claude ai
+def check_recommendation_quality(recommendations: Dict[int, list], user_history: Dict[int, set]):
+    """Check if recommendations are too similar to training data."""
+    overlap_ratios = []
+    for user_id, recs in recommendations.items():
+        history = user_history.get(user_id, set())
+        if not history:
+            continue
+        overlap = len(set(recs) & history)
+        ratio = overlap / len(history)
+        overlap_ratios.append(ratio)
+    
+    avg_overlap = np.mean(overlap_ratios)
+    print(f"Average history overlap: {avg_overlap:.3f}")
+    if avg_overlap > 0.3:  # More than 30% overlap might indicate memorization
+        print("Warning: High training data overlap detected")
+
+def analyze_model_performance(model, train_loader, val_loader):
+    """Analyze model performance on different data subsets."""
+    # Get embeddings
+    def get_embeddings(loader):
+        embeddings = []
+        with torch.no_grad():
+            for batch in loader:
+                input_ids = batch['input_ids'].to(model.device)
+                attention_mask = batch['attention_mask'].to(model.device)
+                emb = model.item_embeddings(input_ids)
+                embeddings.append(emb.cpu().numpy())
+        return np.concatenate(embeddings)
+    
+    train_emb = get_embeddings(train_loader)
+    val_emb = get_embeddings(val_loader)
+    
+    # Compare distributions
+    from scipy.stats import ks_2samp
+    for i in range(train_emb.shape[1]):
+        stat, p_value = ks_2samp(train_emb[:, i], val_emb[:, i])
+        if p_value < 0.05:
+            print(f"Warning: Dimension {i} shows significant difference between train and val")
