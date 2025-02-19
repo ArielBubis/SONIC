@@ -368,7 +368,7 @@ def train_model(
     save_dir.mkdir(exist_ok=True)
 
     # Save best parameters for reference
-    with open('/content/best_params.json', 'r') as f:
+    with open('best_params.json', 'r') as f:
         # json.dump(best_params, f, indent=2)
         best_params = json.load(f)
 
