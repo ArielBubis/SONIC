@@ -1,0 +1,15 @@
+{
+  "model_params": {
+    "hidden_size": 128,
+    "num_hidden_layers": 1,
+    "num_attention_heads": 2,
+    "intermediate_size": 256
+  },
+  "train_params": {
+    "lr": 0.01,
+    "weight_decay": 0.01,
+    "batch_size": 128
+  },
+  "val_loss": 9.748358074824015,
+  "run_name": "search_20250214_163142"
+}

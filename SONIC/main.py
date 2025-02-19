@@ -144,6 +144,11 @@ def run_model(
         ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
+
+    elif model_name == 'bert':
+        results = ROUGE.bert_train.bert_train(embedding, suffix, k, mode)
+        console.print(f"[green]Training and evaluation completed. Results: {results}[/green]")
+
     
     
     if profile:
