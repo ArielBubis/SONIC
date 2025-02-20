@@ -169,7 +169,7 @@ class BERT4RecTrainer:
             with open(log_file, "a") as f:
                 f.write(message + "\n")
 
-        log_message(self.config)
+        # log_message(self.config)
         log_message(str(self.config))
         for name, param in self.model.named_parameters():
             log_message(f"{name}: {param.size()}")
