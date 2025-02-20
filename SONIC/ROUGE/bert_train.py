@@ -171,9 +171,6 @@ class BERT4RecTrainer:
 
         # log_message(self.config)
         log_message(str(self.config))
-        for name, param in self.model.named_parameters():
-            log_message(f"{name}: {param.size()}")
-
 
         """Main training loop."""
         for epoch in tqdm(range(last_epoch, self.config.num_epochs), desc=f"Training {run_name}"):
@@ -516,9 +513,6 @@ def train_model(
                 final_model_path,
             )
             
-            ################# testing for overfitting and underfitting be claude ai
-            analyze_model_performance(model, train_loader, eval_loader)    
-
             log_message(f"\nTraining completed!")
             log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
@@ -580,27 +574,3 @@ def check_recommendation_quality(recommendations: Dict[int, list], user_history:
     print(f"Average history overlap: {avg_overlap:.3f}")
     if avg_overlap > 0.3:  # More than 30% overlap might indicate memorization
         print("Warning: High training data overlap detected")
-
-def analyze_model_performance(model, train_loader, val_loader):
-    """Analyze model performance on different data subsets."""
-    # Get embeddings
-    model.to("cuda")
-    def get_embeddings(loader):
-        embeddings = []
-        with torch.no_grad():
-            for batch in loader:
-                input_ids = batch['input_ids'].to(model.device)
-                attention_mask = batch['attention_mask'].to(model.device)
-                emb = model.item_embeddings(input_ids)
-                embeddings.append(emb.cpu().numpy())
-        return np.concatenate(embeddings)
-    
-    train_emb = get_embeddings(train_loader)
-    val_emb = get_embeddings(val_loader)
-    
-    # Compare distributions
-    from scipy.stats import ks_2samp
-    for i in range(train_emb.shape[1]):
-        stat, p_value = ks_2samp(train_emb[:, i], val_emb[:, i])
-        if p_value < 0.05:
-            print(f"Warning: Dimension {i} shows significant difference between train and val")
