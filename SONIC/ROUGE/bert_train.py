@@ -27,19 +27,19 @@ from SONIC.CREAM.sonic_utils import (
     dict_to_pandas,
     mean_confidence_interval,
 )
-@dataclass
-class TrainingConfig:
-    model_name: str = "BERT4Rec"
-    max_seq_len: int = 128
-    batch_size: int = 128
-    num_epochs: int = 200
-    lr: float = 0.001
-    weight_decay: float = 0.01
-    patience_threshold: int = 16
-    grad_clip_norm: float = 1.0
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    tie_weights: bool = True
-    init_std: float = 0.02
+# @dataclass
+# class TrainingConfig:
+#     model_name: str = "BERT4Rec"
+#     max_seq_len: int = 128
+#     batch_size: int = 128
+#     num_epochs: int = 200
+#     lr: float = 0.001
+#     weight_decay: float = 0.01
+#     patience_threshold: int = 20
+#     grad_clip_norm: float = 1.0
+#     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+#     tie_weights: bool = True
+#     init_std: float = 0.02
 
 
 @dataclass
@@ -412,7 +412,7 @@ def train_model(
             "num_attention_heads": 2,
             "intermediate_size": 256,
         },
-        "train_params": {"lr": 0.01, "weight_decay": 0.01, "batch_size": 128},
+        "train_params": {"lr": 0.001, "weight_decay": 0.01, "batch_size": 128},
         "val_loss": 9.748358074824015,
         "run_name": "search_20250214_163142",
     }
