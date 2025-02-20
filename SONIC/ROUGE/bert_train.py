@@ -340,8 +340,8 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
 
     all_metrics_val = []
     k_values = [k] if isinstance(k, int) else k
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # model.to(device)
 
     # model.eval()  # Ensure evaluation mode
     for current_k in k_values:
