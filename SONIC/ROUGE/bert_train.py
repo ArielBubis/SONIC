@@ -30,16 +30,16 @@ from SONIC.CREAM.sonic_utils import (
 @dataclass
 class TrainingConfig:
     model_name: str = "BERT4Rec"
-    max_seq_len: int
-    batch_size: int
-    num_epochs: int
-    lr: float
-    weight_decay: float
-    patience_threshold: int
-    grad_clip_norm: float
+    max_seq_len: int = 128
+    batch_size: int = 128
+    num_epochs: int = 200
+    lr: float = 0.001
+    weight_decay: float = 0.01
+    patience_threshold: int = 20
+    grad_clip_norm: float = 1.0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    tie_weights: bool
-    init_std: float
+    tie_weights: bool = True
+    init_std: float = 0.02
 
 
 @dataclass
@@ -430,6 +430,7 @@ def train_model(
         num_epochs=200,
         **best_params["train_params"],
     )
+    print(train_config)
 
     # Initialize model
     model = BERT4Rec(
