@@ -6,23 +6,15 @@ from typing import Dict
 from matplotlib import pyplot as plt
 import pandas as pd
 import torch
-from SONIC.CREAM.sonic_utils import (
-    calc_metrics,
-    dict_to_pandas,
-    mean_confidence_interval,
-)
-from SONIC.ROUGE.bert4rec import BERT4Rec
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
-
-
-# config.py
 from dataclasses import dataclass
 import torch
 
+from SONIC.ROUGE.bert4rec import BERT4Rec
 from SONIC.ROUGE.datasets import (
     MaskedLMDataset,
     MaskedLMPredictionDataset,
@@ -30,7 +22,11 @@ from SONIC.ROUGE.datasets import (
     load_embeddings,
     prepare_data,
 )
-
+from SONIC.CREAM.sonic_utils import (
+    calc_metrics,
+    dict_to_pandas,
+    mean_confidence_interval,
+)
 @dataclass
 class TrainingConfig:
     model_name: str = "BERT4Rec"
@@ -158,32 +154,46 @@ class BERT4RecTrainer:
 
         return total_loss / len(self.eval_loader)
 
-    def train(self, last_epoch: int = 0) -> None:
+    def train(save_dir,run_name,self, last_epoch: int = 0) -> None:
+        # Create log file
+        log_file = save_dir / f"{run_name}_training_log.txt"
+
+        def log_message(message: str):
+            print(message)
+            with open(log_file, "a") as f:
+                f.write(message + "\n")
+
         """Main training loop."""
         for epoch in tqdm(range(last_epoch, self.config.num_epochs)):
+            log_message(f"Epoch {epoch}: Starting training")
             # Training phase
             train_loss = self._train_epoch()
             self.train_losses.append(train_loss)
-
+            log_message(f"Train Loss = {train_loss:.4f}")
             # Validation phase
             val_loss = self._evaluate()
             self.val_losses.append(val_loss)
-
             loss_diff = train_loss - val_loss
+            log_message(f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Diff = {loss_diff:.4f}")
 
             self.scheduler.step()
-            tqdm.write(f"Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Diff = {loss_diff:.4f}")
+            log_message(f"Loss diff = {loss_diff:.4f}")
             
             # Early warning for overfitting
             if loss_diff < -0.1:  # Validation loss significantly higher than training loss
+                log_message("Warning: Possible underfitting")
                 tqdm.write("Warning: Possible underfitting")
             elif loss_diff > 0.1:  # Training loss significantly higher than validation loss
+                log_message("Warning: Possible overfitting")
                 tqdm.write("Warning: Possible overfitting")
 
 
             # Model checkpoint handling
             if val_loss < self.best_val_loss:
-                tqdm.write(
+                # tqdm.write(
+                #     f"New best model at epoch {epoch} with val loss {val_loss:.4f}, train loss {train_loss:.4f}"
+                # )
+                log_message(
                     f"New best model at epoch {epoch} with val loss {val_loss:.4f}, train loss {train_loss:.4f}"
                 )
                 self.best_val_loss = val_loss
@@ -195,6 +205,7 @@ class BERT4RecTrainer:
             # Early stopping check
             if self.patience_counter >= self.config.patience_threshold:
                 print("Early stopping triggered.")
+                log_message("Early stopping triggered.")
                 break
 
     def generate_recommendations(
@@ -458,14 +469,6 @@ def train_model(
             trainer.load_checkpoint(checkpoint_path)
             log_message(f"Checkpoint loaded from {checkpoint_path}")
         else:
-            # Create log file
-            log_file = save_dir / f"{run_name}_training_log.txt"
-
-            def log_message(message: str):
-                print(message)
-                with open(log_file, "a") as f:
-                    f.write(message + "\n")
-
             log_message(f"Starting final training with best parameters:")
             log_message(
                 f"Model parameters: {json.dumps(best_params['model_params'], indent=2)}"
@@ -475,7 +478,7 @@ def train_model(
             )
 
             # Train model
-            trainer.train()
+            trainer.train(save_dir,run_name)
 
             ################# testing for overfitting and underfitting be claude ai
             analyze_model_performance(model, train_loader, eval_loader)    
