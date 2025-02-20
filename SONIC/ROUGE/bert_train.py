@@ -97,7 +97,7 @@ class BERT4RecTrainer:
         }
         path = f"checkpoints/{self.config.model_name}/{self.run_name}_best.pt"
         torch.save(checkpoint, path)
-        print(f"Checkpoint saved to {path}")
+        # print(f"Checkpoint saved to {path}")
 
     def load_checkpoint(self, path: str) -> float:
         checkpoint = torch.load(path)
@@ -408,7 +408,7 @@ def train_model(
     best_params = {
         "model_params": {
             "hidden_size": 128,
-            "num_hidden_layers": 1,
+            "num_hidden_layers": 2,
             "num_attention_heads": 2,
             "intermediate_size": 256,
         },
