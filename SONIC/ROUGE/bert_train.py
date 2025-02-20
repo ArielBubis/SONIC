@@ -154,7 +154,7 @@ class BERT4RecTrainer:
 
         return total_loss / len(self.eval_loader)
 
-    def train(save_dir,run_name,self, last_epoch: int = 0) -> None:
+    def train(self, save_dir: str, run_name: str, last_epoch: int = 0) -> None:
         # Create log file
         log_file = save_dir / f"{run_name}_training_log.txt"
 
@@ -242,7 +242,12 @@ class BERT4RecTrainer:
 
         return user_recommendations
 
-def plot_losses(trainer: BERT4RecTrainer):
+def plot_losses(trainer: BERT4RecTrainer, run_name: str):
+    # Create the plots directory if it doesn't exist
+    plots_dir = Path('plots')
+    plots_dir.mkdir(exist_ok=True)
+
+    # Plot the training and validation loss
     plt.figure(figsize=(10, 5))
     plt.plot(trainer.train_losses, label='Training Loss')
     plt.plot(trainer.val_losses, label='Validation Loss')
@@ -250,7 +255,13 @@ def plot_losses(trainer: BERT4RecTrainer):
     plt.ylabel('Loss')
     plt.legend()
     plt.title('Training and Validation Loss')
-    plt.show()
+
+    # Save the plot to the plots directory
+    plot_path = plots_dir / f'{run_name}_loss_plot.png'
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"Saved loss plot to {plot_path}")
+
 
 def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
     run_name = f"bert4rec_{model_name}"
@@ -318,7 +329,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
         embedding_name=model_name,
     )
 
-    plot_losses(trainer)
+    plot_losses(trainer, run_name)
 
     all_metrics_val = []
     k_values = [k] if isinstance(k, int) else k
