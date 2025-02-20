@@ -22,6 +22,7 @@ class BERT4Rec(nn.Module):
         init_std: float = 0.02
     ):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.vocab_size = vocab_size
         self.bert_config = bert_config

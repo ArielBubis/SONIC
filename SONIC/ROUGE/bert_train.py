@@ -161,7 +161,6 @@ class BERT4RecTrainer:
         patience = self.config.patience_threshold
         patience_counter = 0
         min_epochs = 10
-
         # Clear the log file if it exists
         with open(log_file, "w") as f:
             pass
@@ -170,8 +169,14 @@ class BERT4RecTrainer:
             with open(log_file, "a") as f:
                 f.write(message + "\n")
 
+        log_message(self.config)
+        log_message(str(self.config))
+        for name, param in self.model.named_parameters():
+            log_message(f"{name}: {param.size()}")
+
+
         """Main training loop."""
-        for epoch in tqdm(range(last_epoch, self.config.num_epochs)):
+        for epoch in tqdm(range(last_epoch, self.config.num_epochs), desc=f"Training {run_name}"):
             log_message(f"Epoch {epoch}: Starting training")
             # Training phase
             train_loss = self._train_epoch()
@@ -223,7 +228,7 @@ class BERT4RecTrainer:
         user_recommendations = {}
 
         with torch.no_grad():
-            for batch in tqdm(pred_loader):
+            for batch in tqdm(pred_loader,desc=f"Generating recommendations for{k}"):
                 input_ids = batch["input_ids"].to(self.config.device)
                 attention_mask = batch["attention_mask"].to(self.config.device)
                 user_ids = batch["user_id"].cpu().numpy()
@@ -499,11 +504,6 @@ def train_model(
             # Train model
             trainer.train(save_dir,run_name)
 
-            ################# testing for overfitting and underfitting be claude ai
-            analyze_model_performance(model, train_loader, eval_loader)    
-
-            log_message(f"\nTraining completed!")
-            log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
             # Save final model
             torch.save(
@@ -515,6 +515,12 @@ def train_model(
                 },
                 final_model_path,
             )
+            
+            ################# testing for overfitting and underfitting be claude ai
+            analyze_model_performance(model, train_loader, eval_loader)    
+
+            log_message(f"\nTraining completed!")
+            log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
             log_message(f"\nFinal model saved to {final_model_path}")
 
@@ -578,6 +584,7 @@ def check_recommendation_quality(recommendations: Dict[int, list], user_history:
 def analyze_model_performance(model, train_loader, val_loader):
     """Analyze model performance on different data subsets."""
     # Get embeddings
+    model.to("cuda")
     def get_embeddings(loader):
         embeddings = []
         with torch.no_grad():
