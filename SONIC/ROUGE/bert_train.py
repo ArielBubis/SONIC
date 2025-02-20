@@ -157,9 +157,16 @@ class BERT4RecTrainer:
     def train(self, save_dir: str, run_name: str, last_epoch: int = 0) -> None:
         # Create log file
         log_file = save_dir / f"{run_name}_training_log.txt"
+        best_val_loss = float('inf')
+        patience = self.config.patience_threshold
+        patience_counter = 0
+        min_epochs = 10
+
+        # Clear the log file if it exists
+        with open(log_file, "w") as f:
+            pass
 
         def log_message(message: str):
-            print(message)
             with open(log_file, "a") as f:
                 f.write(message + "\n")
 
@@ -180,12 +187,11 @@ class BERT4RecTrainer:
             log_message(f"Loss diff = {loss_diff:.4f}")
             
             # Early warning for overfitting
-            if loss_diff < -0.1:  # Validation loss significantly higher than training loss
-                log_message("Warning: Possible underfitting")
-                tqdm.write("Warning: Possible underfitting")
-            elif loss_diff > 0.1:  # Training loss significantly higher than validation loss
-                log_message("Warning: Possible overfitting")
-                tqdm.write("Warning: Possible overfitting")
+            if abs(loss_diff) > 0.1:  # Only warn if difference is significant
+                if loss_diff > 0.3:
+                    log_message(f"Warning: Large train-val gap (possible overfitting): {loss_diff:.4f}")
+                elif loss_diff < -0.3:
+                    log_message(f"Warning: Validation loss higher than training (possible underfitting): {loss_diff:.4f}")
 
 
             # Model checkpoint handling
@@ -193,8 +199,9 @@ class BERT4RecTrainer:
                 # tqdm.write(
                 #     f"New best model at epoch {epoch} with val loss {val_loss:.4f}, train loss {train_loss:.4f}"
                 # )
+                improvement = (best_val_loss - val_loss) / best_val_loss
                 log_message(
-                    f"New best model at epoch {epoch} with val loss {val_loss:.4f}, train loss {train_loss:.4f}"
+                    f"New best model at epoch {epoch} with val loss {val_loss:.4f}, train loss {train_loss:.4f},Validation improved by {improvement:.2%}"
                 )
                 self.best_val_loss = val_loss
                 self._save_checkpoint(epoch, val_loss)
@@ -203,9 +210,9 @@ class BERT4RecTrainer:
                 self.patience_counter += 1
 
             # Early stopping check
-            if self.patience_counter >= self.config.patience_threshold:
-                print("Early stopping triggered.")
-                log_message("Early stopping triggered.")
+            if patience_counter >= patience and epoch >= min_epochs:
+                tqdm.write(f"Early stopping triggered at epoch {epoch}")
+                log_message(f"Early stopping triggered at epoch {epoch}")
                 break
 
     def generate_recommendations(
@@ -412,7 +419,7 @@ def train_model(
             "num_attention_heads": 2,
             "intermediate_size": 256,
         },
-        "train_params": {"lr": 0.001, "weight_decay": 0.01, "batch_size": 128},
+        "train_params": {"lr": 0.001, "weight_decay": 0.005, "batch_size": 128},
         "val_loss": 9.748358074824015,
         "run_name": "search_20250214_163142",
     }
