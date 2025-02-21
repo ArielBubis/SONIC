@@ -162,8 +162,6 @@ class BERT4RecTrainer:
         patience_counter = 0
         min_epochs = 10
         # Clear the log file if it exists
-        with open(log_file, "w") as f:
-            pass
 
         def log_message(message: str):
             with open(log_file, "a") as f:
@@ -225,7 +223,7 @@ class BERT4RecTrainer:
         user_recommendations = {}
 
         with torch.no_grad():
-            for batch in tqdm(pred_loader,desc=f"Generating recommendations for{k}"):
+            for batch in tqdm(pred_loader,desc=f"Generating recommendations for k:{k}"):
                 input_ids = batch["input_ids"].to(self.config.device)
                 attention_mask = batch["attention_mask"].to(self.config.device)
                 user_ids = batch["user_id"].cpu().numpy()
@@ -353,7 +351,6 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
             user_history=user_history,
             k=current_k
         )
-        check_recommendation_quality(user_recommendations, user_history)
         # Calculate metrics
         df = dict_to_pandas(user_recommendations)
         metrics_val = calc_metrics(val, df, current_k)
@@ -465,6 +462,8 @@ def train_model(
 
     # Create log file
     log_file = save_dir / f"{run_name}_training_log.txt"
+    with open(log_file, "w") as f:
+        pass
 
     def log_message(message: str):
         print(message)
@@ -556,21 +555,3 @@ def bert_train(model_names, suffix, k, mode="val", max_seq_len=128):
             ]
         )
 
-
-
-################# testing for overfitting and underfitting be claude ai
-def check_recommendation_quality(recommendations: Dict[int, list], user_history: Dict[int, set]):
-    """Check if recommendations are too similar to training data."""
-    overlap_ratios = []
-    for user_id, recs in recommendations.items():
-        history = user_history.get(user_id, set())
-        if not history:
-            continue
-        overlap = len(set(recs) & history)
-        ratio = overlap / len(history)
-        overlap_ratios.append(ratio)
-    
-    avg_overlap = np.mean(overlap_ratios)
-    print(f"Average history overlap: {avg_overlap:.3f}")
-    if avg_overlap > 0.3:  # More than 30% overlap might indicate memorization
-        print("Warning: High training data overlap detected")
