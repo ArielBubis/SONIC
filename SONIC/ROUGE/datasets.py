@@ -12,7 +12,18 @@ from pathlib import Path
 from SONIC.CREAM.sonic_utils import safe_split
 
 class LMDataset(Dataset):
+    """
+    Language Modeling Dataset for user-item interactions.
 
+    Args:
+        df (pd.DataFrame): DataFrame containing user-item interactions.
+        max_length (int): Maximum sequence length.
+        num_negatives (int, optional): Number of negative samples. Defaults to None.
+        full_negative_sampling (bool, optional): Whether to use full negative sampling. Defaults to True.
+        user_col (str, optional): Column name for users. Defaults to 'user_id'.
+        item_col (str, optional): Column name for items. Defaults to 'item_id'.
+        time_col (str, optional): Column name for timestamps. Defaults to 'timestamp'.
+    """
     def __init__(self, df, max_length=128, num_negatives=None, full_negative_sampling=True,
                  user_col='user_id', item_col='item_id', time_col='timestamp'):
 
@@ -46,6 +57,15 @@ class LMDataset(Dataset):
         return negatives
 
 class MaskedLMDataset(LMDataset):
+    """
+    Sample negative items for a given item sequence.
+
+    Args:
+        item_sequence (list): List of item IDs in the sequence.
+
+    Returns:
+        np.ndarray: Array of negative samples.
+    """
 
     def __init__(self, df, max_length=128,
                  num_negatives=None, full_negative_sampling=True,
@@ -88,6 +108,22 @@ class MaskedLMDataset(LMDataset):
 
 
 class MaskedLMPredictionDataset(LMDataset):
+    """
+    Masked Language Modeling Dataset for user-item interactions.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing user-item interactions.
+        max_length (int): Maximum sequence length.
+        num_negatives (int, optional): Number of negative samples. Defaults to None.
+        full_negative_sampling (bool, optional): Whether to use full negative sampling. Defaults to True.
+        mlm_probability (float, optional): Probability of masking an item. Defaults to 0.2.
+        masking_value (int, optional): Value used for masking. Defaults to 1.
+        ignore_value (int, optional): Value used to ignore labels. Defaults to -100.
+        force_last_item_masking_prob (float, optional): Probability of forcing the last item to be masked. Defaults to 0.
+        user_col (str, optional): Column name for users. Defaults to 'user_id'.
+        item_col (str, optional): Column name for items. Defaults to 'item_id'.
+        time_col (str, optional): Column name for timestamps. Defaults to 'timestamp'.
+    """
 
     def __init__(self, df, max_length=128, masking_value=1,
                  validation_mode=False,
@@ -101,6 +137,15 @@ class MaskedLMPredictionDataset(LMDataset):
         self.validation_mode = validation_mode
 
     def __getitem__(self, idx):
+        """
+        Get a single data point for masked language modeling.
+
+        Args:
+            idx (int): Index of the data point.
+
+        Returns:
+            dict: Dictionary containing input IDs, labels, and optionally negatives.
+        """
 
         user_id = self.user_ids[idx]
         item_sequence = self.data[user_id]
@@ -122,6 +167,13 @@ class MaskedLMPredictionDataset(LMDataset):
                     'full_history': item_sequence}
         
 class PaddingCollateFn:
+    """
+    Collate function for padding sequences in a batch.
+
+    Args:
+        padding_value (int, optional): Value used for padding. Defaults to 0.
+        labels_padding_value (int, optional): Value used for padding labels. Defaults to -100.
+    """
 
     def __init__(self, padding_value=0, labels_padding_value=-100):
 
@@ -129,6 +181,15 @@ class PaddingCollateFn:
         self.labels_padding_value = labels_padding_value
 
     def __call__(self, batch):
+        """
+        Collate a batch of data points.
+
+        Args:
+            batch (list): List of data points.
+
+        Returns:
+            dict: Dictionary containing collated batch data.
+        """
 
         collated_batch = {}
 
@@ -163,16 +224,17 @@ def prepare_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[int, Set[int]], LabelEncoder]:
     """
     Prepare data for training.
-    
+
     Args:
-        train: Training DataFrame
-        val: Validation DataFrame
-        test: Test DataFrame
-        mode: 'val' or 'test'
-        
+        train (pd.DataFrame): Training DataFrame.
+        val (pd.DataFrame): Validation DataFrame.
+        test (pd.DataFrame): Test DataFrame.
+        mode (str): Mode of operation ('val' or 'test').
+
     Returns:
-        Processed train data, validation data, user history dict, and item encoder
+        Tuple: Processed train data, validation data, user history dict, and item encoder.
     """
+
     if mode not in ['val', 'test']:
         raise ValueError(f"Invalid mode: {mode}. Must be 'val' or 'test'")
 
@@ -208,17 +270,17 @@ def load_embeddings(
 ) -> np.ndarray:
     """
     Load and process embeddings.
-    
+
     Args:
-        model_name: Name of the embedding model
-        train_data: Training DataFrame
-        item_encoder: LabelEncoder for items
-        base_path: Base path for embedding files
-        add_special_tokens: Whether to add special token embeddings
-        special_token_std: Standard deviation for special token embeddings
-        
+        model_name (str): Name of the embedding model.
+        train_data (pd.DataFrame): Training DataFrame.
+        item_encoder (LabelEncoder): LabelEncoder for items.
+        base_path (str, optional): Base path for embedding files. Defaults to '/content/music4all/embeddings'.
+        add_special_tokens (bool, optional): Whether to add special token embeddings. Defaults to True.
+        special_token_std (float, optional): Standard deviation for special token embeddings. Defaults to 0.02.
+
     Returns:
-        Processed embeddings matrix
+        np.ndarray: Processed embeddings matrix.
     """
     try:
         base_name, emb_size = safe_split(model_name)
@@ -256,7 +318,19 @@ def validate_inputs(
     mode: str,
     max_seq_len: int
 ) -> None:
-    """Validate input parameters."""
+    """
+    Validate input parameters.
+
+    Args:
+        model_names (Union[str, List[str]]): Model name(s).
+        suffix (str): Suffix for the run name.
+        k (Union[int, List[int]]): Number of recommendations to generate.
+        mode (str): Mode of operation ('val' or 'test').
+        max_seq_len (int): Maximum sequence length.
+
+    Raises:
+        ValueError: If any input parameter is invalid.
+    """
     if mode not in ['val', 'test']:
         raise ValueError(f"Invalid mode: {mode}. Must be 'val' or 'test'")
     

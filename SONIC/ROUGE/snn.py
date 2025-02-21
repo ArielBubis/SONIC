@@ -8,10 +8,22 @@ from sklearn.preprocessing import LabelEncoder
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 class ShallowEmbeddingModel(nn.Module):
+    """
+    A shallow embedding model for user-item interactions.
+
+    Args:
+        num_users (int): Number of users.
+        num_items (int): Number of items.
+        emb_dim_in (int): Input embedding dimension.
+        precomputed_item_embeddings (np.ndarray, optional): Precomputed item embeddings. Defaults to None.
+        precomputed_user_embeddings (np.ndarray, optional): Precomputed user embeddings. Defaults to None.
+        emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+    """
     def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, precomputed_user_embeddings=None, emb_dim_out=300):
         super(ShallowEmbeddingModel, self).__init__()
         self.emb_dim_in = emb_dim_in
 
+        # Initialize user embeddings
         if precomputed_user_embeddings is None:
             self.user_embeddings = nn.Embedding(num_users, self.emb_dim_in)
         else:
@@ -19,6 +31,7 @@ class ShallowEmbeddingModel(nn.Module):
             assert precomputed_user_embeddings.size(1) == emb_dim_in
             self.user_embeddings = nn.Embedding.from_pretrained(precomputed_user_embeddings)
 
+        # Initialize item embeddings
         if precomputed_item_embeddings is None:
             self.item_embeddings = nn.Embedding(num_items, self.emb_dim_in)
         else:
@@ -26,30 +39,66 @@ class ShallowEmbeddingModel(nn.Module):
             assert precomputed_item_embeddings.size(1) == emb_dim_in
             self.item_embeddings = nn.Embedding.from_pretrained(precomputed_item_embeddings)
 
+        # Define the model architecture
         self.model = nn.Sequential(
             nn.Linear(self.emb_dim_in, emb_dim_out),
             nn.ReLU()
         )
 
+        # Cosine similarity for scoring
         self.cossim = torch.nn.CosineSimilarity()
 
     def freeze_item_embs(self, flag):
+        """
+        Freeze or unfreeze item embeddings.
+
+        Args:
+            flag (bool): If True, freeze the item embeddings. If False, unfreeze them.
+        """
         self.item_embeddings.weight.requires_grad = flag
 
     def freeze_user_embs(self, flag):
+        """
+        Freeze or unfreeze user embeddings.
+
+        Args:
+            flag (bool): If True, freeze the user embeddings. If False, unfreeze them.
+        """
         self.user_embeddings.weight.requires_grad = flag
 
     def forward(self, user_indices, item_indices):
+        """
+        Forward pass of the model.
+
+        Args:
+            user_indices (torch.Tensor): Indices of the users.
+            item_indices (torch.Tensor): Indices of the items.
+
+        Returns:
+            torch.Tensor: Cosine similarity scores between user and item embeddings.
+        """
+        # Get user and item embeddings
         user_embeds = self.user_embeddings(user_indices)
         item_embeds = self.item_embeddings(item_indices)
 
+        # Pass embeddings through the model
         user_embeds = self.model(user_embeds)
         item_embeds = self.model(item_embeds)
 
+        # Compute cosine similarity scores
         scores = self.cossim(user_embeds, item_embeds)
         return scores
 
     def extract_embeddings(self, normalize=True):
+        """
+        Extract user and item embeddings.
+
+        Args:
+            normalize (bool, optional): If True, normalize the embeddings. Defaults to True.
+
+        Returns:
+            tuple: Normalized user and item embeddings.
+        """
         user_embeddings = self.user_embeddings.weight.data
         item_embeddings = self.item_embeddings.weight.data
 
@@ -63,7 +112,19 @@ class ShallowEmbeddingModel(nn.Module):
 
         return user_embeddings, item_embeddings
 
+
 def load_embeddings(model_name, train, ie):
+    """
+    Load item embeddings from a parquet file.
+
+    Args:
+        model_name (str): Name of the model.
+        train (pd.DataFrame): Training data.
+        ie (LabelEncoder): Item encoder.
+
+    Returns:
+        np.ndarray: Loaded item embeddings.
+    """
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
         emb_size = int(emb_size) if emb_size is not None else 104
@@ -81,6 +142,18 @@ def load_embeddings(model_name, train, ie):
     return item_embs
 
 def prepare_data(train, val, test, mode='val'):
+    """
+    Prepare data for training and validation.
+
+    Args:
+        train (pd.DataFrame): Training data.
+        val (pd.DataFrame): Validation data.
+        test (pd.DataFrame): Test data.
+        mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
+
+    Returns:
+        tuple: Prepared training data, validation data, user history, and item encoder.
+    """
     if mode == 'test':
         train = pd.concat([train, val], ignore_index=True).reset_index(drop=True)
         val = test
@@ -100,6 +173,22 @@ def prepare_data(train, val, test, mode='val'):
     return train, val, user_history, ie
 
 def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, emb_dim_out=300):
+    """
+    Calculate recommendations using a shallow neural network model.
+
+    Args:
+        model_name (str): Name of the model.
+        train (pd.DataFrame): Training data.
+        val (pd.DataFrame): Validation data.
+        test (pd.DataFrame): Test data.
+        mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
+        suffix (str, optional): Suffix for the run name. Defaults to 'cosine'.
+        k (int or list, optional): Number of recommendations to generate. Defaults to 50.
+        emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+
+    Returns:
+        pd.DataFrame: Validation metrics.
+    """
     run_name = f'{model_name}_{suffix}'
     train, val, user_history, ie = prepare_data(train, val, test, mode)
     item_embs = load_embeddings(model_name, train, ie)
@@ -156,6 +245,19 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     return metrics_val_concat
 
 def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
+    """
+    Run the shallow neural network model for multiple model names.
+
+    Args:
+        model_names (str or list): Model name(s).
+        suffix (str): Suffix for the run name.
+        k (int or list): Number of recommendations to generate.
+        mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
+        emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+
+    Returns:
+        pd.DataFrame: Combined validation metrics for all models.
+    """
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')

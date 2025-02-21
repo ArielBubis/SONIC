@@ -29,6 +29,9 @@ from SONIC.CREAM.sonic_utils import (
 )
 @dataclass
 class TrainingConfig:
+    """
+    Basic configuration for training the BERT4Rec model.
+    """
     model_name: str = "BERT4Rec"
     max_seq_len: int = 128
     batch_size: int = 128
@@ -44,6 +47,9 @@ class TrainingConfig:
 
 @dataclass
 class DataConfig:
+    """
+    Basic configuration for data paths and columns.
+    """
     train_path: str
     val_path: str
     test_path: str
@@ -51,11 +57,13 @@ class DataConfig:
     user_col: str = "user_id"
     item_col: str = "track_id"
     time_col: str = "timestamp"
-    mode: str = "val"  # 'val' or 'test'
+    mode: str = "val"
 
 
 class BERT4RecTrainer:
-
+    """
+    Trainer class for BERT4Rec model.
+    """
     def __init__(
         self,
         model: torch.nn.Module,
@@ -87,6 +95,13 @@ class BERT4RecTrainer:
         self.val_losses = []
 
     def _save_checkpoint(self, epoch: int, val_loss: float) -> None:
+        """
+        Save model checkpoint.
+
+        Args:
+            epoch (int): Current epoch.
+            val_loss (float): Validation loss.
+        """
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
@@ -100,6 +115,15 @@ class BERT4RecTrainer:
         # print(f"Checkpoint saved to {path}")
 
     def load_checkpoint(self, path: str) -> float:
+        """
+        Load model checkpoint.
+
+        Args:
+            path (str): Path to the checkpoint file.
+
+        Returns:
+            float: Validation loss from the checkpoint.
+        """
         checkpoint = torch.load(path)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -107,7 +131,12 @@ class BERT4RecTrainer:
         return checkpoint["val_loss"]
 
     def _train_epoch(self) -> float:
-        """Train for one epoch."""
+        """
+        Train for one epoch.
+
+        Returns:
+            float: Average training loss for the epoch.
+        """
         self.model.train()
         total_loss = 0.0
 
@@ -136,7 +165,12 @@ class BERT4RecTrainer:
         return total_loss / len(self.train_loader)
 
     def _evaluate(self) -> float:
-        """Evaluate the model."""
+        """
+        Evaluate the model.
+
+        Returns:
+            float: Average validation loss.
+        """
         self.model.eval()
         total_loss = 0.0
 
@@ -155,7 +189,15 @@ class BERT4RecTrainer:
         return total_loss / len(self.eval_loader)
 
     def train(self, save_dir: str, run_name: str, last_epoch: int = 0) -> None:
-        # Create log file
+        """
+        Main training loop.
+
+        Args:
+            save_dir (str): Directory to save checkpoints.
+            run_name (str): Name of the run.
+            last_epoch (int, optional): Last epoch number. Defaults to 0.
+        """
+
         log_file = save_dir / f"{run_name}_training_log.txt"
         best_val_loss = float('inf')
         patience = self.config.patience_threshold
@@ -170,7 +212,6 @@ class BERT4RecTrainer:
         # log_message(self.config)
         log_message(str(self.config))
 
-        """Main training loop."""
         for epoch in tqdm(range(last_epoch, self.config.num_epochs), desc=f"Training {run_name}"):
             log_message(f"Epoch {epoch}: Starting training")
             # Training phase
@@ -218,7 +259,17 @@ class BERT4RecTrainer:
     def generate_recommendations(
         self, pred_loader: DataLoader, user_history: Dict[int, list], k: int = 100
     ) -> Dict[int, list]:
-        """Generate recommendations for users."""
+        """
+        Generate recommendations for users.
+
+        Args:
+            pred_loader (DataLoader): DataLoader for prediction.
+            user_history (Dict[int, list]): User history.
+            k (int, optional): Number of recommendations to generate. Defaults to 100.
+
+        Returns:
+            Dict[int, list]: User recommendations.
+        """
         self.model.eval()
         user_recommendations = {}
 
@@ -250,7 +301,13 @@ class BERT4RecTrainer:
         return user_recommendations
 
 def plot_losses(trainer: BERT4RecTrainer, run_name: str):
-    # Create the plots directory if it doesn't exist
+    """
+    Plot training and validation losses.
+
+    Args:
+        trainer (BERT4RecTrainer): Trainer instance.
+        run_name (str): Name of the run.
+    """
     plots_dir = Path('plots')
     plots_dir.mkdir(exist_ok=True)
 
@@ -271,6 +328,22 @@ def plot_losses(trainer: BERT4RecTrainer, run_name: str):
 
 
 def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
+    """
+    Calculate recommendations using BERT4Rec model.
+
+    Args:
+        model_name (str): Name of the model.
+        train (pd.DataFrame): Training data.
+        val (pd.DataFrame): Validation data.
+        test (pd.DataFrame): Test data.
+        mode (str): Mode of operation ('val' or 'test').
+        suffix (str): Suffix for the run name.
+        k (int or list): Number of recommendations to generate.
+        max_seq_len (int, optional): Maximum sequence length. Defaults to 128.
+
+    Returns:
+        pd.DataFrame: Validation metrics.
+    """
     run_name = f"bert4rec_{model_name}"
     train, val, user_history, ie = prepare_data(train, val, test)
     embs = load_embeddings(model_name, train, ie)
@@ -336,14 +409,10 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
         embedding_name=model_name,
     )
 
-    plot_losses(trainer, run_name)
+    # plot_losses(trainer, run_name)
 
     all_metrics_val = []
     k_values = [k] if isinstance(k, int) else k
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model.to(device)
-
-    # model.eval()  # Ensure evaluation mode
     for current_k in k_values:
         # Generate recommendations
         user_recommendations = trainer.generate_recommendations(
@@ -404,13 +473,8 @@ def train_model(
     save_dir = Path(save_dir)
     save_dir.mkdir(exist_ok=True)
 
-    # best_params_path = os.path.join(os.path.dirname(__file__), 'best_params.json')
-    # # If the file is missing, set to an empty dict (or other default params)
-    # if not os.path.exists(best_params_path):
-    #     best_params = {}  # Empty dictionary
-    # else:
-    #     with open(best_params_path, 'r') as f:
-    #         best_params = json.load(f)
+    # Load best parameters, these are taken from the original article, with slight tweaks
+
     best_params = {
         "model_params": {
             "hidden_size": 128,
@@ -419,8 +483,6 @@ def train_model(
             "intermediate_size": 256,
         },
         "train_params": {"lr": 0.001, "weight_decay": 0.005, "batch_size": 128},
-        "val_loss": 9.748358074824015,
-        "run_name": "search_20250214_163142",
     }
     # Create model config
     model_config = {
@@ -470,10 +532,9 @@ def train_model(
         with open(log_file, "a") as f:
             f.write(message + "\n")
 
-    # # Train model
-    # trainer.train()
     final_model_path = save_dir / f"{run_name}_final.pt"
 
+    # Check if final model exists in the save directory, if so, load it and skip training
     if final_model_path.exists():
         print(f"Final model found at {final_model_path}. Loading model...")
         checkpoint = torch.load(final_model_path)
@@ -483,13 +544,15 @@ def train_model(
 
     else:
         # Check if checkpoint exists
-        checkpoint_path = save_dir / f"{run_name}_best.pt"
+        checkpoint_path = f"checkpoints/BERT4Rec/{run_name}_best.pt"
         if checkpoint_path.exists():
             print(f"Checkpoint found at {checkpoint_path}. Loading checkpoint...")
             trainer.load_checkpoint(checkpoint_path)
             log_message(f"Checkpoint loaded from {checkpoint_path}")
+
+        # Train model from scratch
         else:
-            log_message(f"Starting final training with best parameters:")
+            log_message(f"Starting training with best parameters:")
             log_message(
                 f"Model parameters: {json.dumps(best_params['model_params'], indent=2)}"
             )
@@ -500,7 +563,10 @@ def train_model(
             # Train model
             trainer.train(save_dir,run_name)
 
-
+            try:
+                plot_losses(trainer, run_name)
+            except Exception as e:
+                pass
             # Save final model
             torch.save(
                 {
@@ -517,34 +583,28 @@ def train_model(
 
             log_message(f"\nFinal model saved to {final_model_path}")
 
-    # log_message(f"\nTraining completed!")
-    # log_message(f"Best validation loss: {trainer.best_val_loss:.4f}")
-
-    # # Generate and evaluate final recommendations
-    # recommendations = trainer.generate_recommendations(
-    #     pred_loader,
-    #     user_history
-    # )
-
-    # # Save final model
-    # final_model_path = save_dir / f"{run_name}_final.pt"
-    # torch.save({
-    #     'model_state_dict': model.state_dict(),
-    #     'config': model_config,
-    #     'train_config': asdict(train_config),
-    #     'best_val_loss': trainer.best_val_loss
-    # }, final_model_path)
-
-    # log_message(f"\nFinal model saved to {final_model_path}")
-
     return model, trainer
 
 
 def bert_train(model_names, suffix, k, mode="val", max_seq_len=128):
+    """
+    Train and evaluate the BERT4Rec model.
+
+    Args:
+        model_names (str or list): Name(s) of the model(s) to train.
+        suffix (str): Suffix for the run name.
+        k (int or list): Number of recommendations to generate.
+        mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
+        max_seq_len (int, optional): Maximum sequence length. Defaults to 128.
+
+    Returns:
+        pd.DataFrame: Validation metrics.
+    """
+    
     train = pd.read_parquet("data/train.pqt")
     val = pd.read_parquet("data/validation.pqt")
     test = pd.read_parquet("data/test.pqt")
-
+    
     if isinstance(model_names, str):
         return calc_bert(model_names, train, val, test, mode, suffix, k, max_seq_len)
     else:

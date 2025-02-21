@@ -1,16 +1,23 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import numpy as np
-import torch.nn as nn
-import torch
-from torch.nn.utils.rnn import pad_sequence
 import torch
 import torch.nn as nn
 from transformers import BertModel, BertConfig
-from typing import Dict, Any, Optional
-import numpy as np
 import logging
 
 class BERT4Rec(nn.Module):
+    """
+    BERT4Rec model for sequential recommendation.
+
+    Args:
+        vocab_size (int): Size of the vocabulary (number of unique items).
+        bert_config (Dict[str, Any]): Configuration dictionary for the BERT model.
+        precomputed_item_embeddings (Optional[np.ndarray], optional): Precomputed item embeddings. Defaults to None.
+        add_head (bool, optional): Whether to add a prediction head. Defaults to True.
+        tie_weights (bool, optional): Whether to tie the weights of the prediction head to the item embeddings. Defaults to True.
+        padding_idx (int, optional): Index of the padding token. Defaults to -1.
+        init_std (float, optional): Standard deviation for weight initialization. Defaults to 0.02.
+    """
     def __init__(
         self,
         vocab_size: int,
@@ -31,6 +38,7 @@ class BERT4Rec(nn.Module):
         self.padding_idx = padding_idx
         self.init_std = init_std
 
+        # Initialize item embeddings
         if precomputed_item_embeddings is not None:
             precomputed_item_embeddings = torch.from_numpy(
                 precomputed_item_embeddings.astype(np.float32)
@@ -49,8 +57,10 @@ class BERT4Rec(nn.Module):
                 padding_idx=padding_idx
             )
 
+        # Initialize BERT model
         self.transformer_model = BertModel(BertConfig(**bert_config))
 
+        # Add prediction head if specified
         if self.add_head:
             self.head = nn.Linear(
                 bert_config['hidden_size'],
@@ -60,22 +70,43 @@ class BERT4Rec(nn.Module):
             if self.tie_weights:
                 self.head.weight = nn.Parameter(self.item_embeddings.weight)
 
+        # Initialize weights
         if precomputed_item_embeddings is None:
             self.item_embeddings.weight.data.normal_(mean=0.0, std=self.init_std)
         if self.padding_idx is not None:
             self.item_embeddings.weight.data[self.padding_idx].zero_()
 
     def freeze_item_embs(self, flag: bool) -> None:
+        """
+        Freeze or unfreeze item embeddings.
+
+        Args:
+            flag (bool): If True, freeze the item embeddings. If False, unfreeze them.
+        """
         self.item_embeddings.weight.requires_grad = flag
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the model.
+
+        Args:
+            input_ids (torch.Tensor): Tensor of input item IDs.
+            attention_mask (torch.Tensor): Tensor of attention masks.
+
+        Returns:
+            torch.Tensor: Output tensor from the model.
+        """
+        # Get item embeddings
         embeds = self.item_embeddings(input_ids)
+        
+        # Pass embeddings through the transformer model
         transformer_outputs = self.transformer_model(
             inputs_embeds=embeds,
             attention_mask=attention_mask
         )
         outputs = transformer_outputs.last_hidden_state
 
+        # Apply prediction head if specified
         if self.add_head:
             outputs = self.head(outputs)
 

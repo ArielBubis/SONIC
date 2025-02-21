@@ -10,12 +10,23 @@ from sklearn.preprocessing import LabelEncoder, normalize, MinMaxScaler
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 def prepare_data(train, val, test, mode):
-    
+    """
+    Prepare data for training and validation.
+
+    Args:
+        train (pd.DataFrame): Training data.
+        val (pd.DataFrame): Validation data.
+        test (pd.DataFrame): Test data.
+        mode (str): Mode of operation ('val' or 'test').
+
+    Returns:
+        tuple: Prepared training data, validation data, user history, and item encoder.
+    """
     if mode == 'test':
         train = pd.concat([train, val], ignore_index=True).reset_index(drop=True)
         val = test
     del test
-    
+
     train['item_id'] = train['track_id']
     val['item_id'] = val['track_id']
 
@@ -29,12 +40,27 @@ def prepare_data(train, val, test, mode):
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
 
-
 def prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata):
+    """
+    Prepare the FAISS index for KNN search.
+
+    Args:
+        train (pd.DataFrame): Training data.
+        model_name (str): Name of the model.
+        suffix (str): Suffix for the run name.
+        ie (LabelEncoder): Item encoder.
+        use_lyrics (bool): Whether to use lyrics embeddings.
+        use_metadata (bool): Whether to use metadata embeddings.
+
+    Returns:
+        tuple: User embeddings and FAISS index.
+    """
     lyrical = "" if not use_lyrics else "+lyrics"
     metadata = "" if not use_metadata else "+metadata"
     run_name = f'{model_name}{lyrical}{metadata}_{suffix}'
     tqdm.pandas(desc=f'computing user embeddings for {run_name}')
+    
+    # Load item embeddings
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
         emb_size = int(emb_size) if emb_size is not None else 104
@@ -47,6 +73,7 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata):
     item_embs = item_embs[item_embs.track_id.isin(train.track_id.unique())].reset_index(drop=True)
     item_embs.index = ie.transform(item_embs.track_id).astype('int')
 
+    # Merge lyrics embeddings if required
     if use_lyrics:
         lyrics_embs = pd.read_parquet('embeddings/lyrical.pqt').astype('float32').reset_index()
         lyrics_embs['track_id'] = lyrics_embs['track_id'].apply(lambda x: x.split('/')[-1].split('.')[0])
@@ -54,39 +81,35 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata):
             .reset_index(drop=True).set_index('track_id')
         lyrics_embs.columns = [f'lyrical_{col}' for col in lyrics_embs.columns]
         item_embs.columns = [f'{col}@{model_name}' if col != 'track_id' else 'track_id' for col in item_embs.columns]
-
         item_embs = item_embs.merge(lyrics_embs, on='track_id')
 
+    # Merge metadata embeddings if required
     if use_metadata:
         min_max_scaler = MinMaxScaler()
         metadata = pd.read_parquet('data/id_metadata.pqt')[['danceability', 'energy', 'valence', 'tempo']]
-
-        # normalize metadata
         metadata_normed = pd.DataFrame(min_max_scaler.fit_transform(metadata), columns=metadata.columns)
         metadata_normed.columns = [f'metadata_{col}' for col in metadata.columns]
         metadata_normed['track_id'] = metadata.index
-
         item_embs = item_embs.merge(metadata_normed, on='track_id')
-
 
     item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
     item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
     user_embs = np.stack(train.groupby('user_id')['item_id'].progress_apply(lambda items: item_embs[items].mean(axis=0)).values)
 
+    # Normalize embeddings if using cosine similarity
     if suffix == 'cosine':
         if use_lyrics:
             audio_embs = item_embs[:, :-lyrics_embs.shape[1]]
             lyrics_embs = item_embs[:, -lyrics_embs.shape[1]:]
-
             audio_embs = normalize(audio_embs, axis=1)
             lyrics_embs = normalize(lyrics_embs, axis=1)
-
         user_embs = user_embs / np.linalg.norm(user_embs, axis=1, keepdims=True)
         item_embs = item_embs / np.linalg.norm(item_embs, axis=1, keepdims=True)
+
+    # Create FAISS index
     index = faiss.IndexFlatIP(item_embs.shape[1])
     for item_embs_chunk in np.array_split(item_embs, 100):
         index.add(item_embs_chunk)
-    # index.add(item_embs)
 
     return user_embs, index
 
@@ -136,6 +159,20 @@ def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|li
     return metrics_val_concat
 
 def knn(model_names, suffix, k, mode='val', use_lyrics=False, use_metadata=False):
+    """
+    Run the KNN model for multiple model names.
+
+    Args:
+        model_names (str or list): Model name(s).
+        suffix (str): Suffix for the run name.
+        k (int or list): Number of recommendations to generate.
+        mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
+        use_lyrics (bool, optional): Whether to use lyrics embeddings. Defaults to False.
+        use_metadata (bool, optional): Whether to use metadata embeddings. Defaults to False.
+
+    Returns:
+        pd.DataFrame: Combined validation metrics for all models.
+    """
     train = pd.read_parquet('data/train.pqt')
     val = pd.read_parquet('data/validation.pqt')
     test = pd.read_parquet('data/test.pqt')
