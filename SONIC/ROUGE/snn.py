@@ -46,6 +46,8 @@ class ShallowEmbeddingModel(nn.Module):
             nn.ReLU()
         )
 
+        self.model.to(self.device)
+
         # Cosine similarity for scoring
         self.cossim = torch.nn.CosineSimilarity()
 
