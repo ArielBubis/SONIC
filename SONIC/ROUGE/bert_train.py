@@ -345,7 +345,7 @@ def calc_bert(model_name, train, val, test, mode, suffix, k, max_seq_len=128):
         pd.DataFrame: Validation metrics.
     """
     run_name = f"bert4rec_{model_name}"
-    train, val, user_history, ie = prepare_data(train, val, test)
+    train, val, user_history, ie = prepare_data(train, val, test,mode)
     embs = load_embeddings(model_name, train, ie)
     special_embs = np.random.normal(0.0, 0.02, size=(2, embs.shape[1]))
     embs = np.concatenate([embs, special_embs], axis=0)
