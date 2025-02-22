@@ -105,8 +105,8 @@ class ShallowEmbeddingModel(nn.Module):
         item_embeddings = self.item_embeddings.weight.data
 
         with torch.no_grad():
-            user_embeddings = self.model(user_embeddings).cpu().numpy()
-            item_embeddings = self.model(item_embeddings).cpu().numpy()
+            user_embeddings = self.model(user_embeddings.to(self.device)).cpu().numpy()
+            item_embeddings = self.model(item_embeddings.to(self.device)).cpu().numpy()
 
         if normalize:
             user_embeddings = user_embeddings / np.linalg.norm(user_embeddings, axis=1, keepdims=True)
