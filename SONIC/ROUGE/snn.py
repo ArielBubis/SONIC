@@ -21,6 +21,7 @@ class ShallowEmbeddingModel(nn.Module):
     """
     def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, precomputed_user_embeddings=None, emb_dim_out=300):
         super(ShallowEmbeddingModel, self).__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.emb_dim_in = emb_dim_in
 
         # Initialize user embeddings
@@ -78,10 +79,9 @@ class ShallowEmbeddingModel(nn.Module):
             torch.Tensor: Cosine similarity scores between user and item embeddings.
         """
         # Get user and item embeddings
-        user_embeds = self.user_embeddings(user_indices)
-        item_embeds = self.item_embeddings(item_indices)
+        user_embeds = self.user_embeddings(user_indices).to(self.device)
+        item_embeds = self.item_embeddings(item_indices).to(self.device)
 
-        # Pass embeddings through the model
         user_embeds = self.model(user_embeds)
         item_embeds = self.model(item_embeds)
 
