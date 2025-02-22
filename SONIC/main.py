@@ -143,7 +143,7 @@ def run_model(
     if model_name == 'knn':
         ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
     elif model_name == 'snn':
-        ROUGE.snn.snn(embedding, suffix, k, mode)
+        ROUGE.snn.snn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
 
     elif model_name == 'bert':
         results = ROUGE.bert_train.bert_train(embedding, suffix, k, mode)

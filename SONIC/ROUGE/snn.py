@@ -4,8 +4,9 @@ import numpy as np
 from tqdm.auto import tqdm
 import torch
 import torch.nn as nn
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
+
 
 class ShallowEmbeddingModel(nn.Module):
     """
@@ -84,6 +85,7 @@ class ShallowEmbeddingModel(nn.Module):
         user_embeds = self.user_embeddings(user_indices).to(self.device)
         item_embeds = self.item_embeddings(item_indices).to(self.device)
 
+        # Pass embeddings through the model
         user_embeds = self.model(user_embeds)
         item_embeds = self.model(item_embeds)
 
@@ -115,18 +117,21 @@ class ShallowEmbeddingModel(nn.Module):
         return user_embeddings, item_embeddings
 
 
-def load_embeddings(model_name, train, ie):
+def load_embeddings(model_name, train, ie, use_lyrics=False, use_metadata=False):
     """
-    Load item embeddings from a parquet file.
+    Load item embeddings from a parquet file with optional lyrics and metadata embeddings.
 
     Args:
         model_name (str): Name of the model.
         train (pd.DataFrame): Training data.
         ie (LabelEncoder): Item encoder.
+        use_lyrics (bool, optional): Whether to use lyrics embeddings. Defaults to False.
+        use_metadata (bool, optional): Whether to use metadata embeddings. Defaults to False.
 
     Returns:
         np.ndarray: Loaded item embeddings.
     """
+    # Load base audio embeddings
     if 'mfcc' in model_name:
         _, emb_size = safe_split(model_name)
         emb_size = int(emb_size) if emb_size is not None else 104
@@ -138,10 +143,31 @@ def load_embeddings(model_name, train, ie):
     item_embs['track_id'] = item_embs['track_id'].apply(lambda x: x.split('.')[0])
     item_embs = item_embs[item_embs.track_id.isin(train.track_id.unique())].reset_index(drop=True)
     item_embs.index = ie.transform(item_embs.track_id).astype('int')
+
+    # Merge lyrics embeddings if required
+    if use_lyrics:
+        lyrics_embs = pd.read_parquet('embeddings/lyrical.pqt').astype('float32').reset_index()
+        lyrics_embs['track_id'] = lyrics_embs['track_id'].apply(lambda x: x.split('/')[-1].split('.')[0])
+        lyrics_embs = lyrics_embs[lyrics_embs.track_id.isin(train.track_id.unique())] \
+            .reset_index(drop=True).set_index('track_id')
+        lyrics_embs.columns = [f'lyrical_{col}' for col in lyrics_embs.columns]
+        item_embs.columns = [f'{col}@{model_name}' if col != 'track_id' else 'track_id' for col in item_embs.columns]
+        item_embs = item_embs.merge(lyrics_embs, on='track_id')
+
+    # Merge metadata embeddings if required
+    if use_metadata:
+        min_max_scaler = MinMaxScaler()
+        metadata = pd.read_parquet('data/id_metadata.pqt')[['danceability', 'energy', 'valence', 'tempo']]
+        metadata_normed = pd.DataFrame(min_max_scaler.fit_transform(metadata), columns=metadata.columns)
+        metadata_normed.columns = [f'metadata_{col}' for col in metadata.columns]
+        metadata_normed['track_id'] = metadata.index
+        item_embs = item_embs.merge(metadata_normed, on='track_id')
+
     item_embs = item_embs.drop(['track_id'], axis=1).astype('float32')
     item_embs = item_embs.loc[list(np.sort(train.item_id.unique()))].values
 
     return item_embs
+
 
 def prepare_data(train, val, test, mode='val'):
     """
@@ -174,7 +200,8 @@ def prepare_data(train, val, test, mode='val'):
     user_history = train.groupby('user_id', observed=False)['item_id'].agg(set).to_dict()
     return train, val, user_history, ie
 
-def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, emb_dim_out=300):
+
+def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, emb_dim_out=300, use_lyrics=False, use_metadata=False):
     """
     Calculate recommendations using a shallow neural network model.
 
@@ -187,13 +214,18 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
         suffix (str, optional): Suffix for the run name. Defaults to 'cosine'.
         k (int or list, optional): Number of recommendations to generate. Defaults to 50.
         emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+        use_lyrics (bool, optional): Whether to use lyrics embeddings. Defaults to False.
+        use_metadata (bool, optional): Whether to use metadata embeddings. Defaults to False.
 
     Returns:
         pd.DataFrame: Validation metrics.
     """
-    run_name = f'{model_name}_{suffix}'
+    lyrical = "" if not use_lyrics else "+lyrics"
+    metadata = "" if not use_metadata else "+metadata"
+    run_name = f'{model_name}{lyrical}{metadata}_{suffix}'
+    
     train, val, user_history, ie = prepare_data(train, val, test, mode)
-    item_embs = load_embeddings(model_name, train, ie)
+    item_embs = load_embeddings(model_name, train, ie, use_lyrics, use_metadata)
 
     num_users = train['user_id'].nunique()
     num_items = train['item_id'].nunique()
@@ -210,7 +242,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
 
     # Precompute recommendations up to max_k
     user_recommendations_maxk = {}
-    for user_id in tqdm(all_users, desc=f'Generating recommendations for {model_name}'):
+    for user_id in tqdm(all_users, desc=f'Generating recommendations for {run_name}'):
         history = user_history.get(user_id, set())
         user_vector = user_embs[user_id]
         scores = np.dot(item_embs, user_vector)
@@ -222,7 +254,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     all_metrics_val = []
     for current_k in k:
         user_recommendations = {}
-        for user_id in tqdm(all_users, desc=f'applying snn for {model_name} with k={current_k}'):
+        for user_id in tqdm(all_users, desc=f'applying snn for {run_name} with k={current_k}'):
             user_recommendations[user_id] = user_recommendations_maxk[user_id][:current_k]
         
         df = dict_to_pandas(user_recommendations)
@@ -236,7 +268,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
             metrics_val.index = [f'mean at k={current_k}', f'CI at {current_k=}']
 
         df = dict_to_pandas(metrics_val)
-
+        
     if len(k) > 1:
         metrics_val_concat = pd.concat(all_metrics_val, axis=0)
     else:
@@ -246,7 +278,8 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
 
     return metrics_val_concat
 
-def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
+
+def snn(model_names, suffix, k, mode='val', emb_dim_out=300, use_lyrics=False, use_metadata=False):
     """
     Run the shallow neural network model for multiple model names.
 
@@ -256,6 +289,8 @@ def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
         k (int or list): Number of recommendations to generate.
         mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'.
         emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+        use_lyrics (bool, optional): Whether to use lyrics embeddings. Defaults to False.
+        use_metadata (bool, optional): Whether to use metadata embeddings. Defaults to False.
 
     Returns:
         pd.DataFrame: Combined validation metrics for all models.
@@ -265,6 +300,9 @@ def snn(model_names, suffix, k, mode='val', emb_dim_out=300):
     test = pd.read_parquet('data/test.pqt')
     
     if isinstance(model_names, str):
-        return calc_snn(model_names, train, val, test, mode, suffix, k, emb_dim_out)
+        return calc_snn(model_names, train, val, test, mode, suffix, k, emb_dim_out, use_lyrics, use_metadata)
     else:
-        return pd.concat([calc_snn(model_name, train, val, test, mode, suffix, k, emb_dim_out) for model_name in model_names])
+        return pd.concat([
+            calc_snn(model_name, train, val, test, mode, suffix, k, emb_dim_out, use_lyrics, use_metadata) 
+            for model_name in model_names
+        ])
