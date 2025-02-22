@@ -274,7 +274,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     else:
         metrics_val_concat = all_metrics_val[0]
 
-    metrics_val_concat.to_csv(f'metrics/{run_name}_val.csv')
+    metrics_val_concat.to_csv(f'metrics/snn_{run_name}_val.csv')
 
     return metrics_val_concat
 
