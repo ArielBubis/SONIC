@@ -59,20 +59,10 @@ SONIC consists of three main modules:
 1. Ensure you have Python 3.12.2 installed
 2. Install the package:
 ```bash
-pip install git+https://github.com/ArielBubis/sound_visualisation_for_music_recSys.git
+pip install git+https://github.com/ArielBubis/SONIC
 ```
 
 ## Usage
-
-### Basic Usage
-```python
-import sonic
-
-# Initialize the SONIC pipeline
-sonic.CREAM  # For audio processing and utilities
-sonic.TAILS  # For embedding generation
-sonic.ROUGE  # For recommendation generation
-```
 
 ### Command Line Interface
 ```bash
@@ -83,13 +73,13 @@ sonic --help
 sonic embed --audio-dir /path/to/audio --model-type MFCC --batch-size 32
 
 # Run recommendation model
-sonic run-model --model-name knn --embedding mfcc_104 --mode val --k 50
+sonic run-model --model-name knn --embedding mfcc_104 --mode test --k 50
 ```
 
 ## Model Types
 
 ### Audio Embedders
-- **MFCC**: Traditional audio feature extraction
+- **MFCC-32/104**: Traditional audio feature extraction
 - **MERT**: Transformer-based audio understanding
 - **EncodecMAE**: Advanced audio codec with masked autoencoding
 - **M2V**: Music2Vec embeddings
