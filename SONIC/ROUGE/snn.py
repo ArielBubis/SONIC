@@ -239,7 +239,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     return metrics_val_concat
 
 def snn(model_names, suffix, k, mode='val', emb_dim_out=300, use_lyrics=False, use_metadata=False,
-        num_epochs=100, batch_size=10000, neg_samples=20, patience_threshold=16, l2=0, use_confidence=False):
+        num_epochs=100, batch_size=100, neg_samples=20, patience_threshold=16, l2=0, use_confidence=False):
     """
     Run the shallow neural network model for multiple model names.
 
