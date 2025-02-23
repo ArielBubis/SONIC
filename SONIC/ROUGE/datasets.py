@@ -342,33 +342,32 @@ def validate_inputs(
         raise ValueError("Invalid k values. All must be positive")
     
 
-    class InteractionDataset(Dataset):
-        def __init__(self, df, neg_samples=20, device=None):
-            """One positive vs 20 negatives"""
-            self.df = df
-            self.neg_samples = neg_samples
+class InteractionDataset(Dataset):
+    def __init__(self, df, neg_samples=20, device=None):
+        """One positive vs 20 negatives"""
+        self.df = df
+        self.neg_samples = neg_samples
 
-            self.user_history = df.groupby('user_id')['item_id'].agg(list).to_dict()
-            all_items = set(df.item_id.unique())
-            self.user_negatives = {user: list(all_items - set(self.user_history[user])) for user in self.user_history}
-            self.device = torch.device(device or "cuda" if torch.cuda.is_available() else "cpu")
+        self.user_history = df.groupby('user_id')['item_id'].agg(list).to_dict()
+        all_items = set(df.item_id.unique())
+        self.user_negatives = {user: list(all_items - set(self.user_history[user])) for user in self.user_history}
+        self.device = torch.device(device or "cuda" if torch.cuda.is_available() else "cpu")
 
-        def __len__(self):
-            return len(self.df)
+    def __len__(self):
+        return len(self.df)
 
-        def __getitem__(self, idx):
-            sample = self.df.iloc[idx]
-            user = torch.tensor(sample.user_id, dtype=torch.long, device=self.device)
-            positive_item = torch.tensor(sample.item_id, dtype=torch.long, device=self.device)
-            negative_items = self._sample_negatives(sample.user_id)
-            return user, positive_item, negative_items
+    def __getitem__(self, idx):
+        sample = self.df.iloc[idx]
+        user = torch.tensor(sample.user_id, dtype=torch.long, device=self.device)
+        positive_item = torch.tensor(sample.item_id, dtype=torch.long, device=self.device)
+        negative_items = self._sample_negatives(sample.user_id)
+        return user, positive_item, negative_items
 
-        def _sample_negatives(self, user):
-            negatives = self.user_negatives[user]
-            res = np.random.choice(negatives, self.neg_samples)
-            return torch.tensor(res, dtype=torch.long, device=self.device)
+    def _sample_negatives(self, user):
+        negatives = self.user_negatives[user]
+        res = np.random.choice(negatives, self.neg_samples)
+        return torch.tensor(res, dtype=torch.long, device=self.device)
 
-# todo: write item sampling and training version
 class InteractionDatasetItems(Dataset):
     """All positive users and same number of negative users"""
     def __init__(self, df, neg_samples=20):
