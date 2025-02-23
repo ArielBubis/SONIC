@@ -178,7 +178,7 @@ class ShallowEmbeddingModel(nn.Module):
             else:
                 batch_confidence = torch.ones(batch_size, device=self.device)
             
-            with autocast():
+            with torch.amp.autocast():
                 pos_score = self(batch_user, batch_pos_item).unsqueeze(1)
                 neg_scores = torch.stack([
                     self(batch_user, batch_neg_items[:, i])
@@ -197,29 +197,24 @@ class ShallowEmbeddingModel(nn.Module):
         """Optimized embedding extraction"""
         self.eval()
         
-        def process_embeddings(embeddings, desc):
+        def process_embeddings(embeddings):
             num_embeddings = len(embeddings)
             processed = []
             
             for i in range(0, num_embeddings, batch_size):
                 batch = embeddings[i:i + batch_size].to(self.device)
                 with torch.amp.autocast():
-                    processed.append(self.model(batch).cpu().numpy())
+                    # Process on GPU
+                    batch_processed = self.model(batch)
+                    if normalize:
+                        # Normalize on GPU before transferring to CPU
+                        batch_processed = torch.nn.functional.normalize(batch_processed, p=2, dim=1)
+                    processed.append(batch_processed.cpu().numpy())
             
             return np.concatenate(processed)
 
-        user_embeddings = process_embeddings(
-            self.user_embeddings.weight.data,
-            "Processing user embeddings"
-        )
-        
-        item_embeddings = process_embeddings(
-            self.item_embeddings.weight.data,
-            "Processing item embeddings"
-        )
-
-        if normalize:
-            user_embeddings /= np.linalg.norm(user_embeddings, axis=1, keepdims=True)
-            item_embeddings /= np.linalg.norm(item_embeddings, axis=1, keepdims=True)
+        # Process both embeddings
+        user_embeddings = process_embeddings(self.user_embeddings.weight.data)
+        item_embeddings = process_embeddings(self.item_embeddings.weight.data)
         
         return user_embeddings, item_embeddings

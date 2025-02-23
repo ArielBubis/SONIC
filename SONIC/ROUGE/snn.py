@@ -267,7 +267,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     os.makedirs(f'checkpoints/{model_name}', exist_ok=True)
 #    def train_model(self, train_loader, val_loader, num_epochs=100, neg_samples=20,
 #                   patience_threshold=16, l2=0, use_confidence=False):
-
+    print(f"{run_name} - Training on {device}")
     # Train the model
     best_val_loss = model.train_model(
         train_loader=train_loader,
