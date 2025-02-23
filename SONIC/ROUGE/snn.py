@@ -9,115 +9,116 @@ from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidenc
 
 # Create data loaders
 from SONIC.ROUGE.datasets import InteractionDataset
+from SONIC.ROUGE.snn_model import ShallowEmbeddingModel
 # Initialize model
 
-class ShallowEmbeddingModel(nn.Module):
-    """
-    A shallow embedding model for user-item interactions.
+# class ShallowEmbeddingModel(nn.Module):
+#     """
+#     A shallow embedding model for user-item interactions.
 
-    Args:
-        num_users (int): Number of users.
-        num_items (int): Number of items.
-        emb_dim_in (int): Input embedding dimension.
-        precomputed_item_embeddings (np.ndarray, optional): Precomputed item embeddings. Defaults to None.
-        precomputed_user_embeddings (np.ndarray, optional): Precomputed user embeddings. Defaults to None.
-        emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
-    """
-    def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, precomputed_user_embeddings=None, emb_dim_out=300):
-        super(ShallowEmbeddingModel, self).__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.emb_dim_in = emb_dim_in
+#     Args:
+#         num_users (int): Number of users.
+#         num_items (int): Number of items.
+#         emb_dim_in (int): Input embedding dimension.
+#         precomputed_item_embeddings (np.ndarray, optional): Precomputed item embeddings. Defaults to None.
+#         precomputed_user_embeddings (np.ndarray, optional): Precomputed user embeddings. Defaults to None.
+#         emb_dim_out (int, optional): Output embedding dimension. Defaults to 300.
+#     """
+#     def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, precomputed_user_embeddings=None, emb_dim_out=300):
+#         super(ShallowEmbeddingModel, self).__init__()
+#         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#         self.emb_dim_in = emb_dim_in
 
-        # Initialize user embeddings
-        if precomputed_user_embeddings is None:
-            self.user_embeddings = nn.Embedding(num_users, self.emb_dim_in)
-        else:
-            precomputed_user_embeddings = torch.from_numpy(precomputed_user_embeddings)
-            assert precomputed_user_embeddings.size(1) == emb_dim_in
-            self.user_embeddings = nn.Embedding.from_pretrained(precomputed_user_embeddings)
+#         # Initialize user embeddings
+#         if precomputed_user_embeddings is None:
+#             self.user_embeddings = nn.Embedding(num_users, self.emb_dim_in)
+#         else:
+#             precomputed_user_embeddings = torch.from_numpy(precomputed_user_embeddings)
+#             assert precomputed_user_embeddings.size(1) == emb_dim_in
+#             self.user_embeddings = nn.Embedding.from_pretrained(precomputed_user_embeddings)
 
-        # Initialize item embeddings
-        if precomputed_item_embeddings is None:
-            self.item_embeddings = nn.Embedding(num_items, self.emb_dim_in)
-        else:
-            precomputed_item_embeddings = torch.from_numpy(precomputed_item_embeddings)
-            assert precomputed_item_embeddings.size(1) == emb_dim_in
-            self.item_embeddings = nn.Embedding.from_pretrained(precomputed_item_embeddings)
+#         # Initialize item embeddings
+#         if precomputed_item_embeddings is None:
+#             self.item_embeddings = nn.Embedding(num_items, self.emb_dim_in)
+#         else:
+#             precomputed_item_embeddings = torch.from_numpy(precomputed_item_embeddings)
+#             assert precomputed_item_embeddings.size(1) == emb_dim_in
+#             self.item_embeddings = nn.Embedding.from_pretrained(precomputed_item_embeddings)
 
-        # Define the model architecture
-        self.model = nn.Sequential(
-            nn.Linear(self.emb_dim_in, emb_dim_out),
-            nn.ReLU()
-        )
+#         # Define the model architecture
+#         self.model = nn.Sequential(
+#             nn.Linear(self.emb_dim_in, emb_dim_out),
+#             nn.ReLU()
+#         )
 
-        self.model.to(self.device)
+#         self.model.to(self.device)
 
-        # Cosine similarity for scoring
-        self.cossim = torch.nn.CosineSimilarity()
+#         # Cosine similarity for scoring
+#         self.cossim = torch.nn.CosineSimilarity()
 
-    def freeze_item_embs(self, flag):
-        """
-        Freeze or unfreeze item embeddings.
+#     def freeze_item_embs(self, flag):
+#         """
+#         Freeze or unfreeze item embeddings.
 
-        Args:
-            flag (bool): If True, freeze the item embeddings. If False, unfreeze them.
-        """
-        self.item_embeddings.weight.requires_grad = flag
+#         Args:
+#             flag (bool): If True, freeze the item embeddings. If False, unfreeze them.
+#         """
+#         self.item_embeddings.weight.requires_grad = flag
 
-    def freeze_user_embs(self, flag):
-        """
-        Freeze or unfreeze user embeddings.
+#     def freeze_user_embs(self, flag):
+#         """
+#         Freeze or unfreeze user embeddings.
 
-        Args:
-            flag (bool): If True, freeze the user embeddings. If False, unfreeze them.
-        """
-        self.user_embeddings.weight.requires_grad = flag
+#         Args:
+#             flag (bool): If True, freeze the user embeddings. If False, unfreeze them.
+#         """
+#         self.user_embeddings.weight.requires_grad = flag
 
-    def forward(self, user_indices, item_indices):
-        """
-        Forward pass of the model.
+#     def forward(self, user_indices, item_indices):
+#         """
+#         Forward pass of the model.
 
-        Args:
-            user_indices (torch.Tensor): Indices of the users.
-            item_indices (torch.Tensor): Indices of the items.
+#         Args:
+#             user_indices (torch.Tensor): Indices of the users.
+#             item_indices (torch.Tensor): Indices of the items.
 
-        Returns:
-            torch.Tensor: Cosine similarity scores between user and item embeddings.
-        """
-        # Get user and item embeddings
-        user_embeds = self.user_embeddings(user_indices).to(self.device)
-        item_embeds = self.item_embeddings(item_indices).to(self.device)
+#         Returns:
+#             torch.Tensor: Cosine similarity scores between user and item embeddings.
+#         """
+#         # Get user and item embeddings
+#         user_embeds = self.user_embeddings(user_indices).to(self.device)
+#         item_embeds = self.item_embeddings(item_indices).to(self.device)
 
-        # Pass embeddings through the model
-        user_embeds = self.model(user_embeds)
-        item_embeds = self.model(item_embeds)
+#         # Pass embeddings through the model
+#         user_embeds = self.model(user_embeds)
+#         item_embeds = self.model(item_embeds)
 
-        # Compute cosine similarity scores
-        scores = self.cossim(user_embeds, item_embeds)
-        return scores
+#         # Compute cosine similarity scores
+#         scores = self.cossim(user_embeds, item_embeds)
+#         return scores
 
-    def extract_embeddings(self, normalize=True):
-        """
-        Extract user and item embeddings.
+#     def extract_embeddings(self, normalize=True):
+#         """
+#         Extract user and item embeddings.
 
-        Args:
-            normalize (bool, optional): If True, normalize the embeddings. Defaults to True.
+#         Args:
+#             normalize (bool, optional): If True, normalize the embeddings. Defaults to True.
 
-        Returns:
-            tuple: Normalized user and item embeddings.
-        """
-        user_embeddings = self.user_embeddings.weight.data
-        item_embeddings = self.item_embeddings.weight.data
+#         Returns:
+#             tuple: Normalized user and item embeddings.
+#         """
+#         user_embeddings = self.user_embeddings.weight.data
+#         item_embeddings = self.item_embeddings.weight.data
 
-        with torch.no_grad():
-            user_embeddings = self.model(user_embeddings.to(self.device)).cpu().numpy()
-            item_embeddings = self.model(item_embeddings.to(self.device)).cpu().numpy()
+#         with torch.no_grad():
+#             user_embeddings = self.model(user_embeddings.to(self.device)).cpu().numpy()
+#             item_embeddings = self.model(item_embeddings.to(self.device)).cpu().numpy()
 
-        if normalize:
-            user_embeddings = user_embeddings / np.linalg.norm(user_embeddings, axis=1, keepdims=True)
-            item_embeddings = item_embeddings / np.linalg.norm(item_embeddings, axis=1, keepdims=True)
+#         if normalize:
+#             user_embeddings = user_embeddings / np.linalg.norm(user_embeddings, axis=1, keepdims=True)
+#             item_embeddings = item_embeddings / np.linalg.norm(item_embeddings, axis=1, keepdims=True)
 
-        return user_embeddings, item_embeddings
+#         return user_embeddings, item_embeddings
 
 
 def load_embeddings(model_name, train, ie, use_lyrics=False, use_metadata=False):
