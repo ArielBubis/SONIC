@@ -241,8 +241,9 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50,
     return metrics_val_concat
 
 
-def snn(model_names, suffix, k, mode='val', emb_dim_out=300, use_lyrics=False, use_metadata=False,
-        num_epochs=100, batch_size=10000, neg_samples=20, patience_threshold=16, l2=0, use_confidence=False):
+def snn(model_names, suffix, k, mode='val', use_lyrics=False, use_metadata=False,
+        num_epochs=100, batch_size=10000, neg_samples=20, patience_threshold=16, 
+        l2=0, use_confidence=False):
     """
     Run the shallow neural network model for multiple model names.
 
@@ -270,14 +271,14 @@ def snn(model_names, suffix, k, mode='val', emb_dim_out=300, use_lyrics=False, u
     
     if isinstance(model_names, str):
         return calc_snn(
-            model_names, train, val, test, mode, suffix, k, emb_dim_out, 
+            model_names, train, val, test, mode, suffix, k, 
             use_lyrics, use_metadata, num_epochs, batch_size, neg_samples,
             patience_threshold, l2, use_confidence
         )
     else:
         return pd.concat([
             calc_snn(
-                model_name, train, val, test, mode, suffix, k, emb_dim_out,
+                model_name, train, val, test, mode, suffix, k,
                 use_lyrics, use_metadata, num_epochs, batch_size, neg_samples,
                 patience_threshold, l2, use_confidence
             ) 
