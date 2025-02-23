@@ -8,9 +8,8 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from SONIC.CREAM.sonic_utils import dict_to_pandas, calc_metrics, mean_confidence_interval, safe_split
 
 # Create data loaders
-from datasets import InteractionDataset
+from SONIC.ROUGE.datasets import InteractionDataset
 # Initialize model
-
 
 class ShallowEmbeddingModel(nn.Module):
     """
