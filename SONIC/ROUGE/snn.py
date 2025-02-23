@@ -38,15 +38,16 @@ class ShallowEmbeddingModel(nn.Module):
 
         self.cossim = nn.CosineSimilarity(dim=1)
         
-    @torch.jit.script  # JIT compile the forward pass
     def forward(self, user_indices, item_indices):
-        user_embeds = self.user_embeddings(user_indices)
-        item_embeds = self.item_embeddings(item_indices)
-        
-        user_embeds = self.model(user_embeds)
-        item_embeds = self.model(item_embeds)
-        
-        return self.cossim(user_embeds, item_embeds)
+        # Using torch.no_grad for inference speedup when possible
+        with torch.set_grad_enabled(self.training):
+            user_embeds = self.user_embeddings(user_indices)
+            item_embeds = self.item_embeddings(item_indices)
+            
+            user_embeds = self.model(user_embeds)
+            item_embeds = self.model(item_embeds)
+            
+            return self.cossim(user_embeds, item_embeds)
 
     def train_model(self, train_loader, val_loader, num_epochs=100, neg_samples=20,
                    patience_threshold=16, l2=0, use_confidence=False):
