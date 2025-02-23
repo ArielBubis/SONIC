@@ -55,7 +55,7 @@ class ShallowEmbeddingModel(nn.Module):
         print(f"Training on {self.device}")
         
         # Initialize mixed precision training
-        scaler = GradScaler()
+        scaler = torch.amp.GradScaler()
         
         # Optimize memory allocation
         torch.backends.cudnn.benchmark = True
@@ -205,7 +205,7 @@ class ShallowEmbeddingModel(nn.Module):
             
             for i in range(0, num_embeddings, batch_size):
                 batch = embeddings[i:i + batch_size].to(self.device)
-                with autocast():
+                with torch.amp.autocast():
                     processed.append(self.model(batch).cpu().numpy())
             
             return np.concatenate(processed)

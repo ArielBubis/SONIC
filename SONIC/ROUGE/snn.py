@@ -265,6 +265,8 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     # Set up tensorboard and checkpoints
     writer = SummaryWriter(log_dir=f'runs/{run_name}')
     os.makedirs(f'checkpoints/{model_name}', exist_ok=True)
+#    def train_model(self, train_loader, val_loader, num_epochs=100, neg_samples=20,
+#                   patience_threshold=16, l2=0, use_confidence=False):
 
     # Train the model
     best_val_loss = model.train_model(
@@ -275,10 +277,9 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
         patience_threshold=patience_threshold,
         l2=l2,
         use_confidence=use_confidence,
-        device=device,
-        writer=writer,
-        checkpoint_dir=f'checkpoints/{model_name}',
-        run_name=run_name
+        # writer=writer,
+        # checkpoint_dir=f'checkpoints/{model_name}',
+        # run_name=run_name
     )
 
     # Load best model checkpoint
