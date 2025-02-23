@@ -112,7 +112,7 @@ class ShallowEmbeddingModel(nn.Module):
                 optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
                 
                 # Use automatic mixed precision
-                with torch.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     # Compute all scores in a single forward pass
                     pos_score = self(batch_user, batch_pos_item).unsqueeze(1)
                     neg_scores = self(batch_user.repeat_interleave(neg_samples), batch_neg_items.view(-1))
@@ -178,7 +178,7 @@ class ShallowEmbeddingModel(nn.Module):
             else:
                 batch_confidence = torch.ones(batch_size, device=self.device)
             
-            with torch.amp.autocast():
+            with torch.amp.autocast('cuda'):
                 pos_score = self(batch_user, batch_pos_item).unsqueeze(1)
                 neg_scores = torch.stack([
                     self(batch_user, batch_neg_items[:, i])
@@ -203,7 +203,7 @@ class ShallowEmbeddingModel(nn.Module):
             
             for i in range(0, num_embeddings, batch_size):
                 batch = embeddings[i:i + batch_size].to(self.device)
-                with torch.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     # Process on GPU
                     batch_processed = self.model(batch)
                     if normalize:
