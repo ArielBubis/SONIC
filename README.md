@@ -154,7 +154,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Acknowledgments
 This work builds upon and extends:
 
-- "Comparative Analysis of Pretrained Audio Representations in Music Recommender Systems" by Yan-Martin Tamm and Anna Aljanaki (RecSys '24) [https://arxiv.org/abs/2409.08987]
+- "Comparative Analysis of Pretrained Audio Representations in Music Recommender Systems" by Yan-Martin Tamm and Anna Aljanaki (RecSys '24) [arXiv:2409.08987](https://arxiv.org/abs/2409.08987)
 
 - Based on the Music4All Dataset: [IEEE Paper](https://ieeexplore.ieee.org/document/9145170)
 - Based on 
