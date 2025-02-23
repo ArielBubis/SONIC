@@ -92,19 +92,6 @@ def embed(
     if profile:
         CREAM.utils.stop_profiler(profiler, 'profile_data.prof')
 
-@app.command()
-def tui():
-    """
-    Launch the interactive TUI for embedding tasks.
-    """
-    console.print("[bold blue]Welcome to the Audio Processing CLI![/bold blue]")
-    task = Prompt.ask("Choose a task", choices=["embed"], default="embed")
-
-    if task == "embed":
-        audio_dir = Prompt.ask("Enter the path to the audio directory")
-        model_type = Prompt.ask("Enter the model type (e.g., MFCC, ViT, MusiCNN)")
-        
-        run_embed_task(audio_dir, model_type)
 
 @app.command()
 def data_split(
