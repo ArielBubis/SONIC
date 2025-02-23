@@ -98,11 +98,12 @@ def prepare_data(train, val, test, mode='val'):
     return train, val, user_history, ie
 
 
-def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, emb_dim_out=300, 
+def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50,
            use_lyrics=False, use_metadata=False, num_epochs=100, batch_size=10000, neg_samples=20,
            patience_threshold=16, l2=0, use_confidence=False):
     """
     Calculate recommendations using a shallow neural network model with training.
+    Note: Simplified to use direct embedding similarity without transformation layers.
 
     Args:
         model_name (str): Name of the model
@@ -112,7 +113,6 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
         mode (str, optional): Mode of operation ('val' or 'test'). Defaults to 'val'
         suffix (str, optional): Suffix for the run name. Defaults to 'cosine'
         k (int or list, optional): Number of recommendations to generate. Defaults to 50
-        emb_dim_out (int, optional): Output embedding dimension. Defaults to 300
         use_lyrics (bool, optional): Whether to use lyrics embeddings. Defaults to False
         use_metadata (bool, optional): Whether to use metadata embeddings. Defaults to False
         num_epochs (int, optional): Number of epochs to train. Defaults to 100
@@ -141,10 +141,15 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
 
     num_users = train['user_id'].nunique()
     num_items = train['item_id'].nunique()
-    emb_dim_in = item_embs.shape[1]
-    model = ShallowEmbeddingModel(num_users, num_items, emb_dim_in, 
-                                 precomputed_item_embeddings=item_embs, 
-                                 emb_dim_out=emb_dim_out)
+    embedding_dim = item_embs.shape[1]  # Use input dimension directly
+
+    # Initialize model with the embedding dimension
+    model = ShallowEmbeddingModel(
+        num_users=num_users,
+        num_items=num_items,
+        embedding_dim=embedding_dim,
+        precomputed_item_embeddings=item_embs
+    )
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
@@ -158,21 +163,19 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
     # Set up tensorboard and checkpoints
     writer = SummaryWriter(log_dir=f'runs/{run_name}')
     os.makedirs(f'checkpoints/{model_name}', exist_ok=True)
-#    def train_model(self, train_loader, val_loader, num_epochs=100, neg_samples=20,
-#                   patience_threshold=16, l2=0, use_confidence=False):
+
     print(f"{run_name} - Training on {device}")
-    # Train the model
+    
+    # Train the model with updated parameters
     best_val_loss = model.train_model(
         train_loader=train_loader,
         val_loader=val_loader,
-        run_name=run_name,
         num_epochs=num_epochs,
-        # neg_samples=neg_samples,
-        # patience_threshold=patience_threshold,
-        # l2=l2,
-        # use_confidence=use_confidence,
-        # writer=writer,
-        # checkpoint_dir=f'checkpoints/{model_name}',
+        neg_samples=neg_samples,
+        patience_threshold=patience_threshold,
+        l2=l2,
+        use_confidence=use_confidence,
+        run_name=run_name
     )
 
     # Load best model checkpoint
@@ -181,8 +184,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
-        print(f"Warning: No checkpoint found at {checkpoint_path}")    
-    # model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Warning: No checkpoint found at {checkpoint_path}")
     
     # Extract embeddings and generate recommendations
     user_embs, item_embs = model.extract_embeddings(normalize=(suffix == 'cosine'))
@@ -237,6 +239,7 @@ def calc_snn(model_name, train, val, test, mode='val', suffix='cosine', k=50, em
 
     writer.close()
     return metrics_val_concat
+
 
 def snn(model_names, suffix, k, mode='val', emb_dim_out=300, use_lyrics=False, use_metadata=False,
         num_epochs=100, batch_size=10000, neg_samples=20, patience_threshold=16, l2=0, use_confidence=False):
