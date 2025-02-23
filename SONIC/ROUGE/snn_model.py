@@ -146,13 +146,13 @@ class ShallowEmbeddingModel(nn.Module):
         best_val_loss = float('inf')
         optimizer = torch.optim.Adam(self.parameters())
         scheduler = ReduceLROnPlateau(optimizer, 'min', patience=5)
-
+        print(f"Training on {device}")
         for epoch in range(num_epochs):
             # Training phase
             self.train()
             total_train_loss = 0
 
-            for batch_user, batch_pos_item, batch_confidence in train_loader:
+            for batch_user, batch_pos_item, batch_confidence in tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}"):
                 # Prepare batch data
                 batch_user = batch_user.repeat_interleave(neg_samples).to(device)
                 batch_pos_item = batch_pos_item.repeat_interleave(neg_samples).to(device)
