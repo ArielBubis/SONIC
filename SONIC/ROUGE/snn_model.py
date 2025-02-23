@@ -4,6 +4,12 @@ import numpy as np
 from tqdm import tqdm
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+import torch
+import torch.nn as nn
+import numpy as np
+from tqdm import tqdm
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 class ShallowEmbeddingModel(nn.Module):
     """
     A shallow embedding model for user-item interactions using cosine similarity.
@@ -127,6 +133,17 @@ class ShallowEmbeddingModel(nn.Module):
             device = self.device
 
         def hinge_loss(y_pos, y_neg, confidence, dlt=0.2):
+            """
+            Calculate hinge loss with proper broadcasting
+            
+            Args:
+                y_pos: Tensor of shape (batch_size, neg_samples)
+                y_neg: Tensor of shape (batch_size, neg_samples)
+                confidence: Tensor of shape (batch_size, neg_samples)
+            """
+            # Ensure all inputs have the same shape
+            assert y_pos.shape == y_neg.shape == confidence.shape
+            
             loss = dlt - y_pos + y_neg
             loss = torch.clamp(loss, min=0) * confidence
             return torch.mean(loss)
@@ -146,33 +163,48 @@ class ShallowEmbeddingModel(nn.Module):
         best_val_loss = float('inf')
         optimizer = torch.optim.Adam(self.parameters())
         scheduler = ReduceLROnPlateau(optimizer, 'min', patience=5)
-        print(f"Training on {device}")
+
         for epoch in range(num_epochs):
             # Training phase
             self.train()
             total_train_loss = 0
 
-            for batch_user, batch_pos_item, batch_confidence in tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}"):
-                # Prepare batch data
-                batch_user = batch_user.repeat_interleave(neg_samples).to(device)
-                batch_pos_item = batch_pos_item.repeat_interleave(neg_samples).to(device)
+            for batch_user, batch_pos_item, batch_confidence in train_loader:
+                batch_size = len(batch_user)
+                
+                # Prepare batch data for negative sampling
+                batch_user_expanded = batch_user.unsqueeze(1).repeat(1, neg_samples).reshape(-1).to(device)
+                batch_pos_item = batch_pos_item.to(device)
+                
+                # Generate negative samples
                 batch_neg_items = torch.randint(0, self.item_embeddings.weight.size(0), 
-                                                (len(batch_user) // neg_samples * neg_samples,)).to(device)
-
+                                              (batch_size, neg_samples)).to(device)
+                
                 # Handle confidence scores
                 if not use_confidence:
                     batch_confidence = torch.ones_like(batch_confidence)
-                batch_confidence = batch_confidence.repeat_interleave(neg_samples).to(device)
+                batch_confidence = batch_confidence.to(device)
+                
                 if use_confidence:
                     batch_confidence = (1 + 2 * torch.log(1 + batch_confidence))
-
+                
+                # Expand confidence scores for negative samples
+                batch_confidence = batch_confidence.unsqueeze(1).repeat(1, neg_samples)
+                
                 optimizer.zero_grad()
-
-                # Forward pass
+                
+                # Forward pass for positive samples
                 pos_score = self(batch_user, batch_pos_item)
-                neg_scores = self(batch_user, batch_neg_items)
-
-                # Calculate loss
+                pos_score = pos_score.unsqueeze(1).repeat(1, neg_samples)
+                
+                # Forward pass for negative samples
+                neg_scores = []
+                for i in range(neg_samples):
+                    neg_score = self(batch_user, batch_neg_items[:, i])
+                    neg_scores.append(neg_score.unsqueeze(1))
+                neg_scores = torch.cat(neg_scores, dim=1)
+                
+                # Calculate loss ensuring all tensors have the same shape
                 loss = hinge_loss(pos_score, neg_scores, batch_confidence)
                 if l2 > 0:
                     l2_loss = sum(torch.sum(param ** 2) for param in self.parameters())
@@ -196,7 +228,7 @@ class ShallowEmbeddingModel(nn.Module):
                     batch_user = batch_user.repeat_interleave(neg_samples).to(device)
                     batch_pos_item = batch_pos_item.repeat_interleave(neg_samples).to(device)
                     batch_neg_items = torch.randint(0, self.item_embeddings.weight.size(0), 
-                                                    (len(batch_user) // neg_samples * neg_samples,)).to(device)
+                                                 (len(batch_user),)).to(device)
 
                     if not use_confidence:
                         batch_confidence = torch.ones_like(batch_confidence)
