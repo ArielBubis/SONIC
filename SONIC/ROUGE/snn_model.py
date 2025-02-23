@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 import numpy as np
 from tqdm import tqdm
 
-class OptimizedShallowEmbeddingModel(nn.Module):
+class ShallowEmbeddingModel(nn.Module):
     def __init__(self, num_users, num_items, emb_dim_in, precomputed_item_embeddings=None, 
                  precomputed_user_embeddings=None, emb_dim_out=300):
         super().__init__()
