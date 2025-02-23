@@ -112,13 +112,11 @@ class ShallowEmbeddingModel(nn.Module):
                 optimizer.zero_grad(set_to_none=True)  # More efficient than zero_grad()
                 
                 # Use automatic mixed precision
-                with autocast():
+                with torch.amp.autocast():
                     # Compute all scores in a single forward pass
                     pos_score = self(batch_user, batch_pos_item).unsqueeze(1)
-                    neg_scores = torch.stack([
-                        self(batch_user, batch_neg_items[:, i])
-                        for i in range(neg_samples)
-                    ], dim=1)
+                    neg_scores = self(batch_user.repeat_interleave(neg_samples), batch_neg_items.view(-1))
+                    neg_scores = neg_scores.view(-1, neg_samples)
                     
                     # Vectorized loss computation
                     loss = torch.clamp(0.2 - pos_score + neg_scores, min=0)
