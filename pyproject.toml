@@ -23,6 +23,7 @@ dependencies = [
     "fastparquet",
     "faiss-cpu",
     "rs_metrics",
+    "sentence_transformers"
 ]
 
 # Entry point for CLI commands

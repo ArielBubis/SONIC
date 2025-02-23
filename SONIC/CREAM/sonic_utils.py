@@ -42,10 +42,9 @@ def stop_profiler(profiler, output_file):
         profiler (cProfile.Profile): Profiler object.
         output_file (str): Path to save the profiling data.
     """
-    profiler.disable()  # Stop profiling
+    profiler.disable()
     profiler.dump_stats(output_file)
     logging.info(f"Profiling data saved to {output_file}")
-    # Optional: Launch SnakeViz visualization directly
     print("Run the following command to visualize the profiling data with SnakeViz:")
     print("snakeviz profile_data.prof")
 

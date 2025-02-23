@@ -5,8 +5,14 @@ import logging
 import torch
 
 class M2VEmbedder(embedder.Embedder):
+    """
+    M2VEmbedder class for computing Music2Vec (M2V) embeddings.
+    Args:
+        batch_size (int): Batch size for processing audio files.
+    """
     def __init__(self, batch_size):
         super().__init__(batch_size)
+        # Initialize the Music2Vec encoder
         self.m2v = encoder.get_encoder("m-a-p/music2vec-v1").to(self.device)
     
     def embedding_fn(self, waveform):

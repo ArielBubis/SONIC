@@ -9,7 +9,5 @@
     "lr": 0.01,
     "weight_decay": 0.01,
     "batch_size": 128
-  },
-  "val_loss": 9.748358074824015,
-  "run_name": "search_20250214_163142"
+  }
 }

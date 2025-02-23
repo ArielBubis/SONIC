@@ -106,7 +106,6 @@ def prepare_index(train, model_name, suffix, ie, use_lyrics, use_metadata):
         user_embs = user_embs / np.linalg.norm(user_embs, axis=1, keepdims=True)
         item_embs = item_embs / np.linalg.norm(item_embs, axis=1, keepdims=True)
 
-    # Create FAISS index
     index = faiss.IndexFlatIP(item_embs.shape[1])
     for item_embs_chunk in np.array_split(item_embs, 100):
         index.add(item_embs_chunk)
@@ -124,7 +123,7 @@ def calc_knn(model_name, train, val, test, mode='val', suffix="cosine", k:int|li
     all_users = val.user_id.unique()
 
     if isinstance(k, int):
-        k = [k]  # Convert single int to list for consistency
+        k = [k] # Ensure k is a list
 
     all_metrics_val = []
 

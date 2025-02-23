@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from transformers import BertModel, BertConfig
-import logging
 
 class BERT4Rec(nn.Module):
     """

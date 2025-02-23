@@ -1,6 +1,3 @@
-from poplib import CR
-from click import Option
-from sympy import use
 import torch
 from . import CREAM
 from . import TAILS
@@ -18,6 +15,12 @@ console = Console()
 def run_embed_task(audio_path: str, model_name: str, batch_size: int, np_precision: str):
     """
     Execute the embedding task with validated arguments.
+
+    Args:
+        audio_path (str): Path to the directory containing audio files.
+        model_name (str): Name of the model to use for embedding.
+        batch_size (int): Batch size for processing audio files.
+        np_precision (str): Numpy precision for saving embeddings.
     """
     CREAM.utils.setup_logging('audio_embedding.log')
     if not os.path.exists(audio_path):
@@ -73,6 +76,13 @@ def embed(
 ):
     """
     Embed audio files using the specified model type.
+
+    Args:
+        audio_dir (str): Directory containing audio files.
+        batch_size (int): Batch size for processing audio files.
+        model_type (str): Model type (e.g., MFCC, ViT, MERT).
+        np_precision (str): Numpy precision for saving embeddings.
+        profile (bool): Enable profiling.
     """
     if profile:
         profiler = CREAM.utils.start_profiler()
@@ -108,7 +118,17 @@ def data_split(
 ):
     """
     Split the interactions data into training and validation sets based on the specified date range.
+
+    Args:
+        interactions_file (str): Path to the interactions file.
+        sep (str): Delimiter used in the interactions file (csv only).
+        exclude (Optional[str]): Path to the exclude file.
+        start_date (str): Start date for splitting data.
+        end_date (str): End date for splitting data.
+        test_date (str): Test date for splitting data.
+        profile (bool): Enable profiling.
     """
+
     if profile:
         profiler = CREAM.utils.start_profiler()
     if not os.path.exists(interactions_file):
@@ -133,7 +153,18 @@ def run_model(
 ):
     """
     Run the specified model on the provided training, validation, and test data.
+
+    Args:
+        model_name (str): Name of the model to run.
+        embedding (Optional[List[str]]): Name of the embedding model.
+        mode (str): Mode for running the model (val or test).
+        suffix (str): Suffix for the model name.
+        k (Optional[List[int]]): List of k nearest neighbors to retrieve.
+        use_lyrics (bool): Use lyrics embeddings.
+        use_metadata (bool): Use track metadata.
+        profile (bool): Enable profiling.
     """
+
     if profile:
         profiler = CREAM.utils.start_profiler()
     if not os.path.exists('data/train.pqt') or not os.path.exists('data/validation.pqt') or not os.path.exists('data/test.pqt'):
@@ -144,7 +175,6 @@ def run_model(
         ROUGE.knn.knn(embedding, suffix, k, mode, use_lyrics=use_lyrics, use_metadata=use_metadata)
     elif model_name == 'snn':
         ROUGE.snn.snn(embedding, suffix, k, mode)
-
     elif model_name == 'bert':
         results = ROUGE.bert_train.bert_train(embedding, suffix, k, mode)
         console.print(f"[green]Training and evaluation completed. Results: {results}[/green]")
@@ -162,6 +192,11 @@ def find_corrupt(
 ):
     """
     Find and remove corrupt audio files in the specified directory.
+
+    Args:
+        audio_dir (str): Directory containing audio files.
+        loudness_threshold (float): Loudness threshold for corrupt audio files.
+        profile (bool): Enable profiling.
     """
     if profile:
         profiler = CREAM.utils.start_profiler()
