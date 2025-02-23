@@ -1,81 +1,161 @@
-# SONIC: (S)pectrogram-(O)riented (N)etwork for (I)ntelligent Re(C)ommendation
+# SONIC: Cross-Modal Music Recommendation System
+
 ## Overview
-A comprehensive audio processing pipeline that transforms music files into visual representations for machine learning-based music recommendation. Part of a Recommender Systems course project, this tool generates multi-dimensional audio visualizations to enable image-based music categorization and analysis.
-python version should be Python 3.12.2
-## Dataset
-*Dataset Credit*: [Music4All Dataset](https://ieeexplore.ieee.org/document/9145170)
 
-Special thanks to the original dataset creators for providing the music collection used in this research.
+SONIC (Spectrogram-Oriented Network for Intelligent reCommendation) is a research project investigating the effectiveness of pre-trained audio representations in music recommendation systems (MRS). The project uniquely explores not only traditional audio embedders but also applies vision transformers (ViT) to music recommendation through spectrogram analysis and integrates multilingual text embeddings for lyrics processing.
 
-## Module Architecture
-The SONIC pipeline consists of the following modules:
-- `CREAM` (Conversion, Resources and Enrichment for Audio and Modules): This is a utility module that provides the necessary resources and functions for the SONIC pipeline.
-- `TAILS` (Transformations and Analysis for Intelligent Learning Systems): This module is responsible for the embedding pipelines.
-- `ROUGE` (Recommendation Optimization and User Guidance Engine): This module is responsible for the recommendation engine.
+### Research Motivation
+Traditional music recommendation systems face challenges like the cold-start problem and popularity bias. While hybrid approaches combining collaborative and content-based filtering exist, they often rely heavily on manually curated metadata. SONIC addresses these limitations by leveraging pre-trained models to automatically capture key musical elements like timbre, rhythm, and melody without manual feature engineering.
 
-<!--- more modules to be added here --->
+### Key Research Questions
+1. How do different backend models compare in their recommendation performance?
+2. How do general-purpose embedders like DINO-ViT compare to audio-based embedders?
+3. How does concatenating lyrical embeddings impact recommendation performance?
+4. How does integrating additional track metadata affect MRS metrics?
+5. How does model performance vary at different k-values?
+
 ## Key Features
 
-Multi-threaded audio file processing
-Four advanced audio visualization techniques:
-* Mel Spectrograms
-* Chromagrams
-* FFT Spectra
-* Tempograms
+- **Cross-Modal Analysis**: Combines audio, visual, and textual representations for comprehensive music understanding
+- **Multiple Embedding Approaches**:
+  - Audio-specific models (MFCC, MERT, EncodecMAE)
+  - Vision Transformers (DINO-ViT) applied to spectrograms
+  - Multilingual text embeddings for lyrics
+- **Advanced Audio Visualizations**:
+  - Mel Spectrograms for frequency analysis
+  - Chromagrams for harmonic content
+  - FFT Spectra for frequency distribution
+  - Tempograms for rhythm patterns
+- **Efficient Processing**:
+  - Multi-threaded audio processing
+  - Optimized parallel computation
+  - Flexible configuration options
 
+## Architecture
 
-Optimized performance with parallel processing
-Flexible configuration for audio analysis
+SONIC consists of three main modules:
 
-## Visualizations
-The pipeline creates rich, informative visual representations of audio files:
+### 1. CREAM (Conversion, Resources and Enrichment for Audio and Modules)
+- Audio file handling and conversion
+- Resource management
+- Utility functions and enrichment processes
 
-* Mel Spectrograms: Frequency-based energy distribution
-![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/0355705e-dc46-4b3c-81a0-75282e1d9fea)
-![00CH4HJdxQQQbJfu](https://github.com/user-attachments/assets/f2580091-f44d-4f86-b454-86a018dd58a3)
+### 2. TAILS (Transformations and Analysis for Intelligent Learning Systems)
+- Multiple embedding pipelines:
+  - MFCC (Mel-frequency cepstral coefficients)
+  - MERT (Music Encoder Representations from Transformers)
+  - EncodecMAE (Audio Codec with Masked Autoencoder)
+  - DINO-ViT (Vision Transformer for spectrogram analysis)
+  - Lyrical embeddings (multilingual text processing)
 
-* Chromagrams: Harmonic and tonal content
-![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/81882d00-cb0f-4c20-b252-564d5c20a62a)
-![00CH4HJdxQQQbJfu](https://github.com/user-attachments/assets/3bcd77b4-bcca-4b8d-a81a-313e02c47c8b)
+### 3. ROUGE (Recommendation Optimization and User Guidance Engine)
+- Recommendation algorithms:
+  - KNN (K-Nearest Neighbors)
+  - SNN (Shallow Neural Networks)
+  - BERT4Rec (BERT for sequential recommendation)
 
-* FFT Spectra: Frequency amplitude analysis
-![00b6fV3nx5z2b8Ls](https://github.com/user-attachments/assets/9e111706-ea44-41b8-9687-ddc9f5ad25d7)
-![00CH4HJdxQQQbJfu](https://github.com/user-attachments/assets/c7cf8400-b9b2-4392-90e5-b0f1e61598df)
+## Installation
 
-* Tempograms: Rhythmic pattern visualization
-![00b6fV3nx5z2b8Ls_tempogram](https://github.com/user-attachments/assets/b3580acc-f11d-4f6d-9490-a63a9cf9600a)
-![00CH4HJdxQQQbJfu_tempogram](https://github.com/user-attachments/assets/4c06722b-ac88-451c-8598-6f5028f3200b)
-
-## Purpose
-Transform audio data into machine learning-ready image datasets for:
-
-* Music genre classification
-* Recommendation system training
-* Advanced audio feature extraction
-
-## Technologies
-
-* Python 
-* librosa
-* NumPy
-* Matplotlib
-* OpenCV
-* Pytorch
-* Multiprocessing
-
-## Getting Started
-
-1. Install the package using pip:
+1. Ensure you have Python 3.12.2 installed
+2. Install the package:
 ```bash
 pip install git+https://github.com/ArielBubis/sound_visualisation_for_music_recSys.git
 ```
-2. Import the package:
+
+## Usage
+
+### Basic Usage
 ```python
 import sonic
-```
-3. use cli to run the code
-```bash
-sonic --help
+
+# Initialize the SONIC pipeline
+sonic.CREAM  # For audio processing and utilities
+sonic.TAILS  # For embedding generation
+sonic.ROUGE  # For recommendation generation
 ```
 
-Developed as part of a Recommender Systems course project.
+### Command Line Interface
+```bash
+# Get help
+sonic --help
+
+# Generate embeddings
+sonic embed --audio-dir /path/to/audio --model-type MFCC --batch-size 32
+
+# Run recommendation model
+sonic run-model --model-name knn --embedding mfcc_104 --mode val --k 50
+```
+
+## Model Types
+
+### Audio Embedders
+- **MFCC**: Traditional audio feature extraction
+- **MERT**: Transformer-based audio understanding
+- **EncodecMAE**: Advanced audio codec with masked autoencoding
+- **M2V**: Music2Vec embeddings
+
+### Vision Models
+- **DINO-ViT**: Vision Transformer variants
+  - `dino_vits16`
+  - `dino_vits8`
+  - `dino_vitb16`
+  - `dino_vitb8`
+
+### Text Processing
+- **Lyrical**: Multilingual text embeddings for song lyrics
+  - `paraphrase-multilingual-MiniLM-L12-v2`
+
+## Requirements
+- Python ≥3.10, <3.13
+- PyTorch
+- OpenCV
+- NumPy
+- Matplotlib
+- FAISS
+- Transformers
+- Additional dependencies listed in pyproject.toml
+
+## Documentation
+
+### Data Split Configuration
+```python
+# Default date ranges for data splitting
+START_DATE = '2018-02-20'
+TEST_DATE = '2019-01-20'
+END_DATE = '2019-02-20'
+```
+
+### Artifact Generation
+The system generates various visualizations for each audio file:
+- Mel Spectrograms: Frequency-based energy distribution
+<!-- - Chromagrams: Harmonic and tonal content analysis
+- FFT Spectra: Detailed frequency analysis
+- Tempograms: Rhythm and tempo visualization -->
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## Citation
+
+If you use this work in your research, please cite:
+```
+[Citation information to be added]
+```
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+This work builds upon and extends:
+
+- "Comparative Analysis of Pretrained Audio Representations in Music Recommender Systems" by Yan-Martin Tamm and Anna Aljanaki (RecSys '24) [https://arxiv.org/abs/2409.08987]
+
+- Based on the Music4All Dataset: [IEEE Paper](https://ieeexplore.ieee.org/document/9145170)
+- Based on 
+- Special thanks to the original dataset creators
