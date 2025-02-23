@@ -15,7 +15,7 @@ class ShallowEmbeddingModel(nn.Module):
         self.emb_dim_in = emb_dim_in
 
         # Use half precision for embeddings
-        dtype = torch.float16 if self.device.type == 'cuda' else torch.float32
+        dtype = torch.float32 if self.device.type == 'cuda' else torch.float32
 
         # Initialize embeddings with optimized settings
         if precomputed_user_embeddings is None:
