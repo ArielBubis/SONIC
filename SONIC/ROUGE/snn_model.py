@@ -157,7 +157,7 @@ class ShallowEmbeddingModel(nn.Module):
                 batch_user = batch_user.repeat_interleave(neg_samples).to(device)
                 batch_pos_item = batch_pos_item.repeat_interleave(neg_samples).to(device)
                 batch_neg_items = torch.randint(0, self.item_embeddings.weight.size(0), 
-                                             (len(batch_user),)).to(device)
+                                                (len(batch_user) // neg_samples * neg_samples,)).to(device)
 
                 # Handle confidence scores
                 if not use_confidence:
@@ -196,7 +196,7 @@ class ShallowEmbeddingModel(nn.Module):
                     batch_user = batch_user.repeat_interleave(neg_samples).to(device)
                     batch_pos_item = batch_pos_item.repeat_interleave(neg_samples).to(device)
                     batch_neg_items = torch.randint(0, self.item_embeddings.weight.size(0), 
-                                                 (len(batch_user),)).to(device)
+                                                    (len(batch_user) // neg_samples * neg_samples,)).to(device)
 
                     if not use_confidence:
                         batch_confidence = torch.ones_like(batch_confidence)
